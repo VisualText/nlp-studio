@@ -1,0 +1,12 @@
+node_modules/
+dist/
+out/
+*.log
+
+# Built extension package -- produced by stopgap/scripts/build-vsix.*, not checked in
+# (it is ~10 MB and rebuilt from vscode-nlp on demand).
+*.vsix
+stopgap/vsix/
+
+.DS_Store
+Thumbs.db

@@ -1,0 +1,8 @@
+# These are copied into a Linux image and executed there. A CRLF checkout on
+# Windows makes the shebang line unparseable ("bad interpreter: /usr/bin/env
+# bash^M"), so pin them to LF regardless of core.autocrlf.
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+*.yml           text eol=lf
+
+*.ps1           text eol=crlf
