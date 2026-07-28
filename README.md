@@ -37,6 +37,10 @@ Then open <http://localhost:3000/?folder=/home/workspace>.
 The `?folder=` parameter matters — the extension needs an open workspace folder before its
 analyzer views populate. Full details in [stopgap/README.md](stopgap/README.md).
 
+Deploying to a Linux server: [docs/DEPLOY-LINUX.md](docs/DEPLOY-LINUX.md). Note that the
+container has **no authentication** — read that document's first section before exposing it
+anywhere.
+
 ## Related repositories
 
 | Repo | Role here |
