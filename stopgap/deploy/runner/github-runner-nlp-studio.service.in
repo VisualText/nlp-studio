@@ -1,0 +1,33 @@
+# systemd --user unit for the GitHub Actions runner that deploys
+# studio.visualtext.org. Installed by install-runner.sh, which substitutes
+# @RUNNER_DIR@ and writes it to ~/.config/systemd/user/.
+#
+# A user unit rather than the runner's own svc.sh, which installs a system unit
+# and needs root. The trade-off is that user units die with the user's last
+# session unless lingering is on:
+#
+#     loginctl enable-linger visualtext        # as root, once
+
+[Unit]
+Description=GitHub Actions runner (nlp-studio deploy)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@RUNNER_DIR@
+ExecStart=@RUNNER_DIR@/run.sh
+
+# The runner exits 0 when GitHub asks it to update itself, and non-zero on a
+# dropped connection. Restart on both; there is no exit that should leave the
+# site unable to deploy.
+Restart=always
+RestartSec=15
+
+# A studio image build is long. Give a stop plenty of time to finish rather than
+# killing a container swap halfway through.
+TimeoutStopSec=300
+KillMode=process
+
+[Install]
+WantedBy=default.target

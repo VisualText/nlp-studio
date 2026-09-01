@@ -8,13 +8,26 @@ This ships something usable now. It is not the product — see
 
 ## Build and run
 
-Requires Docker, Node 18+, and a checkout of
-[`vscode-nlp`](https://github.com/VisualText/vscode-nlp) at `../../vscode-nlp`.
+Requires Docker only:
+
+```bash
+./scripts/fetch-vsix.sh        # downloads the latest released nlp-<version>.vsix
+docker compose up --build
+```
+
+`fetch-vsix.sh` takes the extension from its GitHub release, which is what the
+live site runs. To build from a working copy instead — the thing you want while
+developing the extension — use `build-vsix.sh`, which additionally needs Node 18+
+and a checkout of [`vscode-nlp`](https://github.com/VisualText/vscode-nlp) at
+`../../vscode-nlp`:
 
 ```bash
 ./scripts/build-vsix.sh        # Windows: scripts\build-vsix.ps1
 docker compose up --build
 ```
+
+Either way the engine, VisualText files, and example analyzers come from their
+latest releases at build time; nothing is checked in.
 
 Open **<http://localhost:3000/?folder=/home/workspace>**.
 
@@ -27,6 +40,19 @@ To override where `vscode-nlp` lives:
 
 ```bash
 VSCODE_NLP_DIR=/path/to/vscode-nlp ./scripts/build-vsix.sh
+```
+
+## Staying current
+
+The deployed site rebuilds itself when an upstream release lands: each source
+repo pings `nlp-studio` once its release assets are attached, and a workflow here
+runs `scripts/update-studio.sh` on a self-hosted runner on that server. Setup and
+the reasoning are in [deploy/UPDATES.md](deploy/UPDATES.md).
+
+To check by hand whether it is behind:
+
+```bash
+./scripts/update-studio.sh --check
 ```
 
 ## How it fits together

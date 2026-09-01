@@ -1,2 +1,9 @@
 README.md
 docker-compose.yml
+deploy/
+
+# Runtime state from scripts/update-studio.sh. Both live inside the build
+# context, so without these every update run would ship a new context and
+# needlessly bust the build cache.
+logs/
+.update.lock

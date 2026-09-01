@@ -10,3 +10,7 @@ stopgap/vsix/
 
 .DS_Store
 Thumbs.db
+
+# Runtime state from stopgap/scripts/update-studio.sh
+stopgap/logs/
+stopgap/.update.lock

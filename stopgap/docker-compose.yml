@@ -6,8 +6,28 @@ services:
     image: nlp-studio:stopgap
     container_name: nlp-studio
     init: true
-    ports:
-      - "3000:3000"
+    # Come back automatically after a reboot or a daemon restart. Without this
+    # the site 503s until someone notices and runs "docker compose up -d".
+    restart: unless-stopped
+    # Host networking instead of a published port. This host runs CSF, whose
+    # iptables rules filter forwarded traffic by destination port: the docker0
+    # bridge is reachable on port 80 (a container running there works) but not
+    # on 3000, so a normal "127.0.0.1:3000:3000" publish accepts the connection
+    # at docker-proxy and then resets it. Host networking skips the bridge
+    # entirely, and loopback is not filtered.
+    #
+    # Because there is no port mapping to constrain it, the bind address must be
+    # set on the server itself -- see the --host below. The base image's
+    # entrypoint hardcodes "--host 0.0.0.0"; a later --host wins.
+    network_mode: host
+    # Localhost only. The server has no authentication of its own -- anyone who
+    # can reach this port gets a full VS Code and a terminal. Publishing it
+    # requires an authenticating reverse proxy in front (see docs).
+    command:
+      - --extensions-dir
+      - /home/nlpstudio/.vscode/extensions
+      - --host
+      - 127.0.0.1
     volumes:
       # Persist analyzers across container restarts. Comment out for a throwaway
       # demo where every visitor should get the seeded workspace back.

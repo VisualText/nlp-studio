@@ -1,0 +1,136 @@
+# Rebuild studio.visualtext.org when an upstream release lands.
+#
+# Runs on a SELF-HOSTED runner on the machine that serves the site. That host is
+# behind CSF with no inbound path from GitHub, so a hosted runner could not reach
+# it; the runner dials out over HTTPS instead. Nothing here needs an SSH key, a
+# deploy secret, or an open port.
+#
+# The work itself is stopgap/scripts/update-studio.sh, which is deliberately
+# cheap when nothing has changed: it compares upstream release tags against the
+# labels on the running image and exits in about a second if they match. So an
+# extra ping costs nothing, and it is safe for all four source repos to fire
+# whenever they are unsure.
+#
+# SECURITY -- read before adding a trigger.
+#
+# The runner executes whatever this repository's workflows say, as the
+# `visualtext` user, on the host that serves every visualtext.org site. That
+# user is in the `docker` group, which is root-equivalent (docker run -v /:/host).
+# So: push access to this repo is shell access to that host.
+#
+#   * NEVER add `pull_request` here, and never let fork PRs run workflows on this
+#     repo (Settings -> Actions -> "Fork pull request workflows": require
+#     approval for all outside collaborators). A fork PR with a `pull_request`
+#     trigger would run attacker-authored code on the production host.
+#   * Keep the triggers below to dispatch and schedule only.
+#
+# This workflow does NOT check out the repository. It runs the copy of the
+# scripts already deployed at DEPLOY_DIR, so that a push to this repo cannot
+# silently change what runs on the server. Updating the scripts themselves is a
+# deliberate `git pull` on the host -- see stopgap/deploy/UPDATES.md.
+
+name: Deploy NLP-Studio
+
+on:
+  # The normal path: one of the four source repos finished attaching a release's
+  # assets and pinged us. See stopgap/deploy/workflows/ for the sending side.
+  repository_dispatch:
+    types: [upstream-release]
+
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'What to do'
+        type: choice
+        default: update
+        options:
+          - update    # rebuild and swap if anything is behind
+          - check     # report drift only, change nothing
+          - force     # rebuild and swap even if already current
+          - no-swap   # build and test a candidate, leave the live site alone
+
+  # Safety net, not the mechanism. If a ping is ever lost -- an expired
+  # CLASSIC_PAT, a runner that was down, a source workflow that failed before its
+  # notify step -- this catches it within a week rather than never.
+  #
+  # It uses --force so it also picks up a rebased gitpod/openvscode-server base
+  # image, which no release event announces and which decides which engine binary
+  # the build installs.
+  #
+  # 03:20 UTC on Sundays. Delete this block if you would rather it only ever ran
+  # on a real release.
+  schedule:
+    - cron: '20 3 * * 0'
+
+# The job calls no GitHub API, so it needs no token scopes at all.
+permissions: {}
+
+# One deploy at a time. Not cancel-in-progress: interrupting a run midway through
+# swapping images is worse than making the next one wait. update-studio.sh also
+# takes its own flock, so a manual run on the server cannot collide with this.
+concurrency:
+  group: deploy-studio
+  cancel-in-progress: false
+
+env:
+  DEPLOY_DIR: /home/visualtext/nlp-studio/stopgap
+
+jobs:
+  deploy:
+    name: Update the site
+    runs-on: [self-hosted, nlp-studio]
+    timeout-minutes: 45
+
+    steps:
+      - name: Why this run happened
+        run: |
+          echo "event:  ${{ github.event_name }}"
+          echo "source: ${{ github.event.client_payload.source || 'n/a' }}"
+          echo "tag:    ${{ github.event.client_payload.tag || 'n/a' }}"
+          echo "run:    ${{ github.event.client_payload.run_url || 'n/a' }}"
+
+      - name: Update
+        run: |
+          set -euo pipefail
+          case "${{ github.event_name }}" in
+            schedule)          flag=--force ;;
+            workflow_dispatch) case "${{ inputs.mode }}" in
+                                 check)   flag=--check   ;;
+                                 force)   flag=--force   ;;
+                                 no-swap) flag=--no-swap ;;
+                                 *)       flag=          ;;
+                               esac ;;
+            *)                 flag= ;;
+          esac
+          echo "running: update-studio.sh ${flag:-(no flags)}"
+          # --check exits 2 to mean "an update is available", which is
+          # information, not failure.
+          rc=0
+          "$DEPLOY_DIR/scripts/update-studio.sh" ${flag:+"$flag"} || rc=$?
+          if [ "$rc" -eq 2 ] && [ "${flag:-}" = --check ]; then
+            echo "an update is available"
+            exit 0
+          fi
+          exit "$rc"
+
+      - name: What is live now
+        if: always()
+        run: |
+          {
+            echo "### studio.visualtext.org"
+            echo
+            if docker image inspect nlp-studio:stopgap >/dev/null 2>&1; then
+              echo '| component | version |'
+              echo '|---|---|'
+              for l in vscode-nlp nlp-engine visualtext-files analyzers built-at; do
+                v="$(docker image inspect nlp-studio:stopgap \
+                       --format "{{index .Config.Labels \"org.visualtext.$l\"}}")"
+                echo "| $l | ${v:-(unlabelled)} |"
+              done
+            else
+              echo '(no nlp-studio:stopgap image)'
+            fi
+            echo
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:3000/ || echo none)"
+            echo "Backend health: \`$code\` (200 expected)"
+          } >> "$GITHUB_STEP_SUMMARY"
