@@ -127,16 +127,18 @@ class Runs(unittest.TestCase):
         self.assertIn({"file": "spec/greeting.nlp", "pass": 3, "line": 5, "message": "Syntax error."}, result["problems"])
         self.assertIsNone(result["tree"])
 
-    @unittest.skipIf(sys.platform == "win32", "the Windows engine creates the file")
-    def test_on_linux_a_name_only_openfile_is_reported_where_it_wrote_nothing(self):
-        old = SAMPLE.joinpath("spec", "output.nlp").read_text(encoding="utf-8").replace(
+    def test_a_name_only_openfile_writes_its_file(self):
+        # nlp-engine 4.1.3 (NLPPlus 2.2.38): openfile("name") creates the file on
+        # Linux too. Before it, this wrote nothing on Linux and the run server said
+        # so at the line; with the pinned engine there must be the file and no such
+        # problem, on every platform.
+        plain = SAMPLE.joinpath("spec", "output.nlp").read_text(encoding="utf-8").replace(
             'openfile("output.json","app")', 'openfile("output.json")')
-        result = nlp_run.run(sample_files() | {"spec/output.nlp": old}, TEXT)
-        self.assertEqual((result["status"], result["output"]), ("ok", {}), result)
-        [problem] = [p for p in result["problems"] if p["message"].startswith("openfile(")]
-        self.assertEqual((problem["file"], problem["pass"]), ("spec/output.nlp", 4))
-        self.assertIn('openfile("output.json")', old.splitlines()[problem["line"] - 1])
-        self.assertIn('Use openfile("output.json", "app")', problem["message"])
+        self.assertIn('openfile("output.json")', plain)
+        result = nlp_run.run(sample_files() | {"spec/output.nlp": plain}, TEXT)
+        self.assertEqual(result["status"], "ok", result)
+        self.assertEqual(json.loads(result["output"]["output.json"]), {"greetings": 3})
+        self.assertEqual([p for p in result["problems"] if p["message"].startswith("openfile(")], [])
 
     def test_an_endless_loop_is_stopped(self):
         loop = '@CODE\nL("i") = 0;\nwhile (1) { L("i")++; }\n@@CODE\n'

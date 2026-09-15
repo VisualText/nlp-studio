@@ -5,9 +5,9 @@
 
 @CODE
 L("root") = getconcept(findroot(),"greetings");
-# "app", not just the name: on Linux the engine opens a file named without a mode
-# read-write, which cannot create it, and writes nothing. It empties output/ before
-# every run, so appending starts from an empty file here too.
+# "app" as well as the name, so this runs on every engine: on Linux, NLPPlus 2.2.37
+# and earlier could not create a file opened by name alone, and wrote nothing. The
+# engine empties output/ before every run, so appending starts from an empty file.
 L("out") = openfile("output.json","app");
 L("out") << "{\"greetings\": " << numval(L("root"),"count") << "}";
 closefile(L("out"));
