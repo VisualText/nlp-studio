@@ -1,0 +1,71 @@
+# Test NLP Studio (studio/) on every push and pull request that touches it: the
+# page, the run server, the built page in a browser, and the deployable image
+# under the restrictions it runs with on studio.visualtext.org.
+#
+# GitHub-hosted runners ONLY. This workflow runs on pull requests, so it must never
+# use `runs-on: self-hosted` -- the self-hosted runner is the production host
+# (see deploy-studio.yml).
+
+name: Studio
+
+on:
+  push:
+    branches: [main]
+    paths: ["studio/**", ".github/workflows/studio.yml"]
+  pull_request:
+    paths: ["studio/**", ".github/workflows/studio.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests and self test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: studio
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: studio/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          npm ci --no-audit --no-fund
+          python -m pip install -r server/requirements.txt
+
+      - name: Page unit tests
+        run: npm test
+
+      - name: Run-server tests (with the engine)
+        run: python -m unittest discover -s server -v
+
+      - name: Build
+        run: npm run build
+
+      - name: The built page, in headless Chrome, with a run server
+        run: python scripts/selftest.py dist
+
+  image:
+    name: Image, smoke-tested as it runs live
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build --build-arg "NLP_STUDIO_COMMIT=${GITHUB_SHA::12}" -t nlp-studio:ci studio
+
+      - name: Smoke test
+        run: bash studio/deploy/smoke-test.sh nlp-studio:ci

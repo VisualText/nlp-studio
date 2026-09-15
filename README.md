@@ -59,6 +59,9 @@ files. It listens on 127.0.0.1. Read
 [Running analyzers](docs/ARCHITECTURE.md#running-analyzers-implemented) before letting
 anyone else reach it.
 
+Deploying beside the phase-1 editor, at studio.visualtext.org/studio/ behind the same
+password: [studio/deploy/INSTALL.md](studio/deploy/INSTALL.md).
+
 ## Quick start (phase 1)
 
 Requires Docker and a checkout of [`vscode-nlp`](https://github.com/VisualText/vscode-nlp)

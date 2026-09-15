@@ -129,7 +129,16 @@ the analyzer in VS Code, and that is the case this slice is for: the server list
 Before strangers can run analyzers, the operating system has to contain the run process: a
 container or sandbox per run (nsjail, bubblewrap, gVisor) with a read-only filesystem apart
 from the run folder, no network, an unprivileged user and no host secrets — and
-authentication or rate limits in front. That is deployment work, not done here.
+authentication or rate limits in front. That is not built.
+
+What is built is narrower: on studio.visualtext.org the studio runs at `/studio/`, as a
+container beside the phase-1 editor and behind the same password
+([studio/deploy/](../studio/deploy/INSTALL.md)). The container has a read-only root
+filesystem with only `/tmp` writable, no Linux capabilities, an unprivileged user, and CPU,
+memory and process limits — so a run can write nowhere but its own temporary folder. It
+shares the host's network, as that host's firewall forces on the phase-1 container too, so
+it is not network-isolated. That is acceptable there only because everyone with the
+password already has a terminal on the same host through phase 1.
 
 ### Why the engine stays server-side
 

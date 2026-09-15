@@ -74,6 +74,7 @@ concurrency:
 
 env:
   DEPLOY_DIR: /home/visualtext/nlp-studio/stopgap
+  APP_DEPLOY_DIR: /home/visualtext/nlp-studio/studio/deploy
 
 jobs:
   deploy:
@@ -113,6 +114,37 @@ jobs:
           fi
           exit "$rc"
 
+      # The phase-2 app at /studio/ (studio/deploy/). Runs even when the phase-1
+      # update failed: they are separate containers, and one being behind is no
+      # reason to leave the other behind too.
+      - name: Update the studio app (/studio/)
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          script="$APP_DEPLOY_DIR/update.sh"
+          if [ ! -x "$script" ]; then
+            echo "$script is not on the server yet -- git pull there to install it (studio/deploy/INSTALL.md)"
+            exit 0
+          fi
+          case "${{ github.event_name }}" in
+            schedule)          flag=--force ;;
+            workflow_dispatch) case "${{ inputs.mode }}" in
+                                 check)   flag=--check   ;;
+                                 force)   flag=--force   ;;
+                                 no-swap) flag=--no-swap ;;
+                                 *)       flag=          ;;
+                               esac ;;
+            *)                 flag= ;;
+          esac
+          echo "running: studio/deploy/update.sh ${flag:-(no flags)}"
+          rc=0
+          "$script" ${flag:+"$flag"} || rc=$?
+          if [ "$rc" -eq 2 ] && [ "${flag:-}" = --check ]; then
+            echo "an app update is available"
+            exit 0
+          fi
+          exit "$rc"
+
       - name: What is live now
         if: always()
         run: |
@@ -133,4 +165,21 @@ jobs:
             echo
             code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:3000/ || echo none)"
             echo "Backend health: \`$code\` (200 expected)"
+            echo
+            echo "### studio.visualtext.org/studio/"
+            echo
+            if docker image inspect nlp-studio:app >/dev/null 2>&1; then
+              echo '| component | version |'
+              echo '|---|---|'
+              for l in nlp-studio visualtext-files built-at; do
+                v="$(docker image inspect nlp-studio:app \
+                       --format "{{index .Config.Labels \"org.visualtext.$l\"}}")"
+                echo "| $l | ${v:-(unlabelled)} |"
+              done
+            else
+              echo '(no nlp-studio:app image -- not installed yet)'
+            fi
+            echo
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:3001/api/health || echo none)"
+            echo "App health: \`$code\` (200 expected once installed)"
           } >> "$GITHUB_STEP_SUMMARY"
