@@ -32,6 +32,10 @@ NLP_STUDIO_GITHUB_TOKEN, a personal access token, instead gives the GitHub calls
 token with no sign-in at all -- for development on your own machine only, since anyone
 who reaches the server acts as you. It is refused alongside sign-in.
 
+NLP_STUDIO_REQUIRE_SIGN_IN=1 makes the server refuse to start unless sign-in is fully
+configured. Set it wherever nothing else -- such as a password in the proxy -- stands in
+front, so a missing setting stops the server instead of opening it.
+
 Standard library only. The engine is the one dependency, and only child.py imports it.
 In development the page reaches this through Vite's proxy (vite.config.ts).
 """
@@ -79,6 +83,10 @@ class RunServer(ThreadingHTTPServer):
         public_url = option("public_url").rstrip("/")
         sign_in = bool(github.client_id and github.client_secret and users and public_url)
         dev_token = option("dev_token")
+        if option("require_sign_in").strip().lower() in ("1", "true", "yes") and not sign_in:
+            raise ValueError("NLP_STUDIO_REQUIRE_SIGN_IN is set, but GitHub sign-in is not fully configured "
+                             "(NLP_STUDIO_GITHUB_CLIENT_ID, NLP_STUDIO_GITHUB_CLIENT_SECRET, NLP_STUDIO_USERS, "
+                             "NLP_STUDIO_PUBLIC_URL): refusing to start without it.")
         if (github.client_id or github.client_secret or users) and not sign_in:
             raise ValueError("GitHub sign-in needs all of NLP_STUDIO_GITHUB_CLIENT_ID, NLP_STUDIO_GITHUB_CLIENT_SECRET, "
                              "NLP_STUDIO_USERS and NLP_STUDIO_PUBLIC_URL.")
@@ -374,6 +382,7 @@ def options(argv=None) -> argparse.Namespace:
     opts.client_secret = os.environ.get("NLP_STUDIO_GITHUB_CLIENT_SECRET", "")
     opts.users = os.environ.get("NLP_STUDIO_USERS", "")
     opts.dev_token = os.environ.get("NLP_STUDIO_GITHUB_TOKEN", "")
+    opts.require_sign_in = os.environ.get("NLP_STUDIO_REQUIRE_SIGN_IN", "")
     return opts
 
 

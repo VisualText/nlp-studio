@@ -23,3 +23,5 @@ Thumbs.db
 stopgap/logs/
 stopgap/.update.lock
 studio/deploy/.update.lock
+# The app's sign-in settings, secret included: written on the server (studio/deploy/env.example).
+studio/deploy/.env

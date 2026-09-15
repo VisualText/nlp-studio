@@ -24,6 +24,17 @@ services:
     command: ["python", "server/app.py", "--host", "127.0.0.1", "--port", "3001", "--dist", "dist",
               "--max-runs", "2", "--timeout", "10"]
 
+    # GitHub sign-in (INSTALL.md, "Switching to GitHub sign-in"). The values come from
+    # studio/deploy/.env beside this file -- written on the server, never committed
+    # (.gitignore) -- which Compose reads for itself. Without it every value is empty
+    # and the app runs as before, behind the site's password.
+    environment:
+      NLP_STUDIO_GITHUB_CLIENT_ID: ${NLP_STUDIO_GITHUB_CLIENT_ID:-}
+      NLP_STUDIO_GITHUB_CLIENT_SECRET: ${NLP_STUDIO_GITHUB_CLIENT_SECRET:-}
+      NLP_STUDIO_USERS: ${NLP_STUDIO_USERS:-}
+      NLP_STUDIO_PUBLIC_URL: ${NLP_STUDIO_PUBLIC_URL:-}
+      NLP_STUDIO_REQUIRE_SIGN_IN: ${NLP_STUDIO_REQUIRE_SIGN_IN:-}
+
     # An analyzer's file functions can take any path. Here the only writable place
     # is /tmp, where each run's own folder lives and is deleted after it.
     read_only: true

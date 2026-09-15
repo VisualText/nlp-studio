@@ -1,13 +1,19 @@
 # NLP Studio at studio.visualtext.org/studio/
 
-The phase-2 studio — the editor and its run server — as a second container beside
-the phase-1 editor, on the same host name and behind the same password.
+The phase-2 studio — the editor, its run server, and GitHub for invited people — as a
+second container beside the phase-1 editor, on the same host name.
 
 ```
-  nginx :443  (Basic auth, .htpasswd-studio)
+  nginx :443
      ├── /studio/  ->  127.0.0.1:3001   nlp-studio-app   (this directory)
-     └── /         ->  127.0.0.1:3000   nlp-studio       (stopgap/)
+     │                 the site's password, or GitHub sign-in (nginx-app-*.conf)
+     └── /         ->  127.0.0.1:3000   nlp-studio       (stopgap/, the site's password)
 ```
+
+It starts behind the site's password, exactly like phase 1. Once a GitHub App exists,
+[Switching to GitHub sign-in](#switching-to-github-sign-in) replaces the password on
+`/studio/` with invited GitHub accounts, who can open analyzers from repositories, run
+them, and commit changes back as pull requests.
 
 Commands marked **as visualtext** run as the account that owns the site and is in the
 `docker` group; **as root** only for nginx.
@@ -15,24 +21,28 @@ Commands marked **as visualtext** run as the account that owns the site and is i
 ## What is contained, and what is not
 
 Running an analyzer is running its author's code: NLP++ has file functions that take
-any path. The run server refuses `system()`, `urltofile()` and the like before a run
-(see [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md#the-run-server-is-not-a-sandbox)),
-and the container adds, around every run:
+any path. The run server refuses `system()`, `urltofile()`, the `db*()` functions and
+the like before a run (see
+[docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md#the-run-server-is-not-a-sandbox)), and
+the container adds, around every run:
 
 - a **read-only root filesystem** — the only writable place is `/tmp` (512 MB, in
   memory), where each run gets its own folder that is deleted after it;
 - **no Linux capabilities**, `no-new-privileges`, and an unprivileged user;
-- **1 CPU, 1 GB of memory, 128 processes**, so a runaway pass cannot starve the
-  sites on this host; each run is also killed after 10 seconds.
+- **1 CPU, 1 GB of memory, 128 processes**, so a runaway pass cannot starve the sites
+  on this host; each run is also killed after 10 seconds.
 
-What it does **not** have is network isolation. CSF on this host forces host
-networking (the reason is in [docker-compose.yml](docker-compose.yml)), so a
-process in the container can reach whatever listens on the host's loopback.
+What it does **not** have is network isolation. CSF on this host forces host networking
+(the reason is in [docker-compose.yml](docker-compose.yml)), so a process in the
+container could reach what listens on the host's loopback. NLP++ has no built-in that
+opens a connection — the one that fetches a URL is refused — so an analyzer cannot do it
+through the language; the gap is for a flaw in the engine itself.
 
-That is acceptable here for one reason: everyone who has the studio password
-already has a terminal on this host through the phase-1 editor at `/`. This
-deployment adds no access they do not already have. It is **not** fit to serve
-people without that password — that needs the per-run sandbox described in
+**Who that is acceptable for.** Behind the site's password, everyone who can run an
+analyzer already has a terminal on this host through phase 1, so the app adds nothing.
+With GitHub sign-in, invited people who have no phase-1 password can run analyzers too.
+Invite only people you would trust with that: the list is `NLP_STUDIO_USERS`, and it is
+not a public sign-up. Opening it to anyone would need the per-run sandbox described in
 ARCHITECTURE.md.
 
 ## Install
@@ -51,26 +61,29 @@ restrictions as the live container: the sample analyzer must run to its known ou
 `system()` must be refused, and a run must fail to write outside `/tmp`. Then:
 
     curl -s http://127.0.0.1:3001/api/health
-    # {"ok": true, "engine": "2.2.37", "timeout": 10.0, "maxRuns": 2}
+    # {"ok": true, "engine": "2.2.38", ..., "signIn": false, "github": false}
 
 Nothing is public yet: the container listens on loopback only.
 
-### 3. Route /studio/ in nginx — as root
+### 3. Route /studio/ in nginx, behind the password — as root
 
-The phase-1 nginx file now also carries the `/studio/` locations. Install it over
-the old copy:
+The `/studio/` locations are their own file, installed beside the phase-1 one. Put the
+password variant in place, and bring the phase-1 file up to date (it no longer carries
+`/studio/`):
 
-    d=/home/visualtext/nlp-studio/stopgap/deploy
-    cp /etc/nginx/conf.d/users/visualtext/studio.visualtext.org/nlp-studio.conf /root/nlp-studio.conf.before-app
-    cp "$d/nginx-studio.conf" /etc/nginx/conf.d/users/visualtext/studio.visualtext.org/nlp-studio.conf
+    d=/home/visualtext/nlp-studio
+    n=/etc/nginx/conf.d/users/visualtext/studio.visualtext.org
+    cp "$n/nlp-studio.conf" /root/nlp-studio.conf.before-app
+    cp "$d/stopgap/deploy/nginx-studio.conf"     "$n/nlp-studio.conf"
+    cp "$d/studio/deploy/nginx-app-password.conf" "$n/nlp-studio-app.conf"
     nginx -t
 
 `nginx -t` must report `test is successful` before the reload:
 
     /usr/local/cpanel/scripts/restartsrv_nginx
 
-Apache needs no change. `/studio/` never reaches it: nginx answers the whole host
-name, as for phase 1.
+Apache needs no change. `/studio/` never reaches it: nginx answers the whole host name,
+as for phase 1.
 
 ### 4. Verify — in this order
 
@@ -90,9 +103,103 @@ name, as for phase 1.
     curl -sk -o /dev/null -w '%{http_code}\n' -u "$U" $S/                     # 302 (to ?folder=/home/examples)
 
 A 200 on any anonymous request means `/studio/` is open to everyone: stop the container
-(`docker compose -f studio/deploy/docker-compose.yml down`) and put the old nginx file back.
+(`docker compose -f studio/deploy/docker-compose.yml down`) and put the old nginx files
+back.
 
 Then, in a browser, open <https://studio.visualtext.org/studio/>, and press **Run**.
+
+## Switching to GitHub sign-in
+
+Invited people sign in with their GitHub account instead of the site's password, open
+analyzers from the repositories the app is installed on, and commit changes back as
+pull requests. The server holds each person's GitHub token; the page never sees it.
+
+### 1. Register the GitHub App — a VisualText owner, on github.com
+
+VisualText → Settings → Developer settings → GitHub Apps → **New GitHub App**:
+
+| Setting | Value |
+|---|---|
+| Name | `NLP Studio` (or any free name) |
+| Homepage URL | `https://studio.visualtext.org/studio/` |
+| Callback URL | `https://studio.visualtext.org/studio/api/auth/callback` |
+| Expire user authorization tokens | on |
+| Request user authorization (OAuth) during installation | off |
+| Webhook | off (untick Active) |
+| Repository permissions | **Contents: Read and write**, **Pull requests: Read and write** (Metadata: Read is added for you) |
+| Account permissions | none |
+| Where can this GitHub App be installed | **Any account** — so VisaLinkAI can install it for teg-analyzers |
+
+Then, on the app's page: note the **Client ID**, and **Generate a new client secret**.
+The secret is shown once; it goes into the file in step 3 and nowhere else.
+
+### 2. Install the app on the repositories to edit
+
+On the app's page, **Install App**: on VisualText for its repositories (analyzers,
+analyzer-templates, ...), and — by a VisaLinkAI owner — on VisaLinkAI for teg-analyzers.
+Choose **Only select repositories**. The studio lists exactly what the app is installed on
+and the signed-in person can see; committing also needs that person to have push access.
+
+### 3. Write the settings — as visualtext
+
+    cd /home/visualtext/nlp-studio/studio/deploy
+    cp env.example .env && chmod 600 .env
+    nano .env      # the client ID and secret, the invited GitHub logins
+
+`.env` is never committed (it is in `.gitignore`) and Compose reads it from this
+directory. Keep `NLP_STUDIO_REQUIRE_SIGN_IN=1`: with it the app refuses to start unless
+all the sign-in settings are there.
+
+### 4. Restart the app with them — as visualtext
+
+    docker compose -f /home/visualtext/nlp-studio/studio/deploy/docker-compose.yml up -d
+    curl -s http://127.0.0.1:3001/api/health
+    # ..., "signIn": true, "github": true}
+
+`"signIn": true` is the only answer to go on with. If the container is not running, its
+log says which setting is missing:
+
+    docker logs --tail 20 nlp-studio-app
+
+### 5. Take the password off /studio/ — as root
+
+    n=/etc/nginx/conf.d/users/visualtext/studio.visualtext.org
+    cp /home/visualtext/nlp-studio/studio/deploy/nginx-app-signin.conf "$n/nlp-studio-app.conf"
+    nginx -t && /usr/local/cpanel/scripts/restartsrv_nginx
+
+The phase-1 editor at `/` keeps its password.
+
+### 6. Verify
+
+    S=https://studio.visualtext.org
+
+    curl -sk -o /dev/null -w '%{http_code}\n' $S/studio/                            # 200: the page
+    curl -sk $S/studio/api/health                                                   # "signIn": true
+    curl -sk -o /dev/null -w '%{http_code}\n' -X POST -H 'Content-Type: application/json' \
+         -d '{"files":{},"text":""}' $S/studio/api/run                              # 401: running needs sign-in
+    curl -sk -o /dev/null -w '%{http_code}\n' $S/studio/api/github/repos            # 401
+    curl -sk -o /dev/null -w '%{http_code}\n' "$S/?folder=/home/examples"          # 401: phase 1 still asks
+                                                                                    # (a bare / is 302: it redirects first)
+
+A 200 from `/api/run` or `/api/github/repos` without signing in means sign-in is not on:
+put `nginx-app-password.conf` back at once.
+
+Then, in a browser: <https://studio.visualtext.org/studio/> → **Sign in with GitHub** →
+**Open from GitHub**, open an analyzer, change something, **Commit…** — and find the pull
+request on GitHub. Signing in with an account not in `NLP_STUDIO_USERS` must end at "not
+invited".
+
+### Changing who is invited
+
+Edit `NLP_STUDIO_USERS` in `.env`, then `docker compose ... up -d` as in step 4. A restart
+signs everyone out.
+
+### Back to the password
+
+    cp /home/visualtext/nlp-studio/studio/deploy/nginx-app-password.conf "$n/nlp-studio-app.conf"
+    nginx -t && /usr/local/cpanel/scripts/restartsrv_nginx
+
+The app can keep its sign-in settings; behind the password, people sign in with both.
 
 ## Keeping it current
 
@@ -105,7 +212,7 @@ rebuilds only when something moved:
 - **a new visualtext-files release**, for the analyzer templates.
 
 The weekly forced run rebuilds it too, which picks up fixes in the Node and Python
-base images.
+base images. An update keeps `.env`: Compose reads it every time.
 
 By hand, as visualtext:
 
@@ -121,6 +228,7 @@ Logs go to `stopgap/logs/update-app-YYYY-MM.log`.
 
     docker image inspect nlp-studio:app --format '{{json .Config.Labels}}'
     docker logs --tail 50 nlp-studio-app
+    curl -s http://127.0.0.1:3001/api/health
 
 ## Rolling back
 
@@ -129,9 +237,9 @@ Logs go to `stopgap/logs/update-app-YYYY-MM.log`.
 
 ## Removing it
 
-As root, put back the nginx file from before step 3 and reload:
+As root, remove the app's nginx file and reload:
 
-    cp /root/nlp-studio.conf.before-app /etc/nginx/conf.d/users/visualtext/studio.visualtext.org/nlp-studio.conf
+    rm /etc/nginx/conf.d/users/visualtext/studio.visualtext.org/nlp-studio-app.conf
     nginx -t && /usr/local/cpanel/scripts/restartsrv_nginx
 
 As visualtext:
