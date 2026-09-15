@@ -15,7 +15,9 @@ import { monaco } from "./monaco";
 import { installHighlighting, THEMES } from "./highlight";
 import { NlpLanguageClient, installLanguageFeatures } from "./lsp/client";
 import { languageFor } from "./lsp/convert";
-import { type AnalyzerEntry, type Pass, fileUri, loadFiles, loadIndex, passes, pathOf } from "./analyzers";
+import {
+	type AnalyzerEntry, type Pass, fileUri, loadFiles, loadIndex, passes, pathOf, shownInKnowledgeBase,
+} from "./analyzers";
 import {
 	type Account, type CommitResult, type FoundAnalyzer, type RecentAnalyzer, type RepoAnalyzers, type Repository,
 	SIGN_IN_URL, account, analyzersIn, commitChanges as sendCommit, entryName, recent, remember, repositories, signOut,
@@ -666,7 +668,7 @@ export class Studio {
 			const label = `${p.n ?? "–"}  ${p.file || p.n == null ? p.name : p.kind}`;
 			item(seqList, label, p.file, p.comment || p.kind, !p.active);
 		}
-		const kb = entry.files.filter((f) => f.startsWith("kb/"));
+		const kb = entry.files.filter(shownInKnowledgeBase);
 		if (kb.length) {
 			const list = section("Knowledge base");
 			for (const f of kb) item(list, f.slice(3), f);

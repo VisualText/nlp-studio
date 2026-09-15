@@ -171,6 +171,10 @@ async function githubChecks(studio: Studio, check: (name: string, ok: boolean, g
 		studio.current?.name);
 	check("...with its passes, knowledge base and input", studio.passList.some((p) => p.name === "greeting")
 		&& studio.current!.files.includes("kb/user/hier.kb") && studio.inputPath === "input/hello.txt", studio.current?.files);
+	const kbListed = [...document.querySelectorAll<HTMLElement>("#files button[data-path]")]
+		.map((b) => b.dataset.path!).filter((p) => p.startsWith("kb/"));
+	check("the knowledge base lists the analyzer's .dict and .kbb files, not the engine's .kb files",
+		kbListed.includes("kb/user/greetings.dict") && !kbListed.some((p) => p.endsWith(".kb")), kbListed);
 	check("...and it is remembered for next time", recent().some((r) => r.repo === "acme/analyzers" && r.folder === "nested/deep/hello"),
 		recent());
 
