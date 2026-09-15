@@ -172,24 +172,53 @@ def main() -> int:
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     url = f"http://127.0.0.1:{server.server_address[1]}/index.html?selftest={'run' if run_proc else '1'}"
-    profile = tempfile.mkdtemp(prefix="nlp-studio-selftest-")
     # GitHub's Ubuntu runners restrict the user namespaces Chrome's sandbox needs.
     sandbox = ["--no-sandbox"] if os.environ.get("CI") else []
-    # The browser's log carries the page's console messages and errors.
+    # How long the page may take to say its script started before the browser is started
+    # again. On GitHub's runners Chrome's network service has crashed just after startup
+    # ("Network service crashed or was terminated, restarting service") and taken the first
+    # page load with it, so the page never ran at all; a fresh browser loads it.
+    page_wait = float(os.environ.get("NLP_STUDIO_SELFTEST_PAGE_WAIT", "30"))
+    profiles: list[str] = []
+    # The browser's log carries the page's console messages and errors, across restarts.
     browser_log = tempfile.NamedTemporaryFile(prefix="nlp-studio-selftest-browser-", suffix=".log", delete=False)
-    proc = subprocess.Popen(
-        [browser, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", *sandbox,
-         "--enable-logging=stderr", "--v=0", f"--user-data-dir={profile}", "--window-size=1280,900", url],
-        stdout=subprocess.DEVNULL, stderr=browser_log)
-    start = started[0] = time.time()
+
+    def launch() -> subprocess.Popen:
+        profile = tempfile.mkdtemp(prefix="nlp-studio-selftest-")
+        profiles.append(profile)
+        return subprocess.Popen(
+            [browser, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", *sandbox,
+             "--enable-logging=stderr", "--v=0", f"--user-data-dir={profile}", "--window-size=1280,900", url],
+            stdout=subprocess.DEVNULL, stderr=browser_log)
+
+    def stop(process: subprocess.Popen) -> None:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True)
+        else:
+            process.kill()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            pass
+
+    proc = launch()
+    start = started[0] = launched = time.time()
+    restarts = 0
     try:
-        while "data" not in result and time.time() - start < 120:
+        while "data" not in result and time.time() - launched < 120:
+            if not result.get("steps") and time.time() - launched > page_wait and restarts < 2:
+                restarts += 1
+                print(f"selftest: the page did not start within {page_wait:g}s; "
+                      f"starting the browser again ({restarts} of 2)", flush=True)
+                stop(proc)
+                # Only the new browser's progress counts: a report the old one sent as it
+                # died must not pass for the new page having started.
+                result.pop("steps", None)
+                proc = launch()
+                launched = started[0] = time.time()
             time.sleep(0.25)
     finally:
-        if os.name == "nt":
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
-        else:
-            proc.kill()
+        stop(proc)
         if run_proc:
             if os.name == "nt":
                 subprocess.run(["taskkill", "/T", "/F", "/PID", str(run_proc.pid)], capture_output=True)
@@ -198,7 +227,8 @@ def main() -> int:
         if github:
             github.stop()
         server.shutdown()
-        shutil.rmtree(profile, ignore_errors=True)
+        for profile in profiles:
+            shutil.rmtree(profile, ignore_errors=True)
 
     data = result.get("data")
     if not data:

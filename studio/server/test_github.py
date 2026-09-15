@@ -12,6 +12,7 @@ import time
 import unittest
 import urllib.parse
 from argparse import Namespace
+from datetime import datetime, timezone
 
 import app
 from fake_github import FakeGitHub
@@ -226,6 +227,112 @@ class SignIn(unittest.TestCase):
         self.assertIsNone(client.cookie)
         status, me = client.json("GET", "/api/auth/me")
         self.assertEqual((status, me["signedIn"]), (200, False))
+
+
+def signed_in(port: int) -> Client:
+    client = Client(port)
+    _, res, _ = client.call("GET", "/api/auth/login")
+    state = urllib.parse.parse_qs(urllib.parse.urlsplit(res.getheader("Location")).query)["state"][0]
+    status, _, body = client.call("GET", f"/api/auth/callback?code={FakeGitHub.CODE}&state={state}")
+    assert status == 302, body
+    return client
+
+
+class Committing(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.fake = FakeGitHub(REPOS, login="OctoCat", read_only=("acme/other",)).start()
+        cls.server = start({"client_id": FakeGitHub.CLIENT_ID, "client_secret": FakeGitHub.CLIENT_SECRET,
+                            "users": "octocat", "public_url": "http://studio.test/studio",
+                            "github_api": cls.fake.url, "github_web": cls.fake.url})
+        cls.port = cls.server.server_address[1]
+        cls.minute = 0
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.fake.stop()
+
+    def setUp(self):
+        # Each test commits at its own minute, so branch names never collide by accident.
+        Committing.minute += 1
+        stamp = datetime(2026, 9, 15, 10, Committing.minute, tzinfo=timezone.utc)
+        self.server.github.now = lambda: stamp
+        self.client = signed_in(self.port)
+
+    def commit(self, **changes):
+        body = {"repo": "acme/analyzers", "ref": "main", "commit": self.fake.commit_sha("acme/analyzers"),
+                "folder": "hello", "files": {"spec/rules.nlp": "@CODE\n# changed in the studio\n@@CODE\n"},
+                "message": "Change the rules\n\nMore about it.", "description": "Why it changed."}
+        body.update(changes)
+        return self.client.json("POST", "/api/github/commit", body)
+
+    def test_a_commit_goes_on_a_new_branch_with_a_pull_request(self):
+        status, body = self.commit()
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body["branch"], f"nlp-studio/octocat/hello-20260915-10{Committing.minute:02d}")
+        pull = self.fake.pulls["acme/analyzers"][body["pullRequest"]["number"] - 1]
+        self.assertEqual((pull["head"]["ref"], pull["base"]["ref"], pull["title"], pull["body"]),
+                         (body["branch"], "main", "Change the rules", "Why it changed."))
+        self.assertEqual(body["pullRequest"]["url"], pull["html_url"])
+
+        on_branch = self.fake.files_at("acme/analyzers", body["branch"])
+        self.assertEqual(on_branch["hello/spec/rules.nlp"], "@CODE\n# changed in the studio\n@@CODE\n")
+        self.assertEqual({k: v for k, v in on_branch.items() if k != "hello/spec/rules.nlp"},
+                         {k: v for k, v in REPOS["acme/analyzers"].items() if k != "hello/spec/rules.nlp"})
+        self.assertEqual(self.fake.files_at("acme/analyzers", "main"), REPOS["acme/analyzers"])
+        self.assertEqual(self.fake.commits[body["commit"]]["parents"], [self.fake.commit_sha("acme/analyzers")])
+
+    def test_committing_again_adds_to_the_same_branch_and_pull_request(self):
+        _, first = self.commit()
+        status, second = self.commit(ref=first["branch"], commit=first["commit"], branch=first["branch"],
+                                     files={"input/text.txt": "a second input\n"}, message="Change the input")
+        self.assertEqual(status, 200, second)
+        self.assertEqual((second["branch"], second["pullRequest"]), (first["branch"], first["pullRequest"]))
+        on_branch = self.fake.files_at("acme/analyzers", first["branch"])
+        self.assertEqual((on_branch["hello/spec/rules.nlp"], on_branch["hello/input/text.txt"]),
+                         ("@CODE\n# changed in the studio\n@@CODE\n", "a second input\n"))
+        self.assertEqual(self.fake.commits[second["commit"]]["parents"], [first["commit"]])
+
+    def test_a_branch_that_moved_on_is_not_overwritten(self):
+        _, first = self.commit()
+        # Opened before the first commit landed: its base is no longer the branch's tip.
+        status, body = self.commit(ref=first["branch"], branch=first["branch"], files={"input/text.txt": "late\n"})
+        self.assertEqual(status, 409, body)
+        self.assertIn("has moved on", body["message"])
+        self.assertEqual(self.fake.commit_sha("acme/analyzers", first["branch"]), first["commit"])
+
+    def test_a_branch_name_already_taken_gets_a_number(self):
+        taken = f"nlp-studio/octocat/hello-20260915-10{Committing.minute:02d}"
+        self.fake.refs[("acme/analyzers", taken)] = self.fake.commit_sha("acme/analyzers")
+        status, body = self.commit()
+        self.assertEqual((status, body["branch"]), (200, f"{taken}-2"))
+
+    def test_a_repository_you_cannot_write_to_says_so(self):
+        status, body = self.commit(repo="acme/other", commit=self.fake.commit_sha("acme/other"), folder="")
+        self.assertEqual(status, 403, body)
+        self.assertIn("cannot write to acme/other", body["message"])
+
+    def test_only_an_analyzers_own_files_can_be_committed(self):
+        for files in [{"../README.md": "x"}, {"output/output.json": "{}"}, {"spec/../../x": "x"}, {"notes.md": "x"}, {}]:
+            with self.subTest(files=files):
+                status, body = self.commit(files=files)
+                self.assertEqual((status, body["status"]), (400, "github"), body)
+
+    def test_a_commit_needs_a_message_and_a_real_base(self):
+        for changes in [{"message": "  "}, {"commit": "main"}, {"ref": "../main"}, {"folder": "../hello"}]:
+            with self.subTest(changes=changes):
+                self.assertEqual(self.commit(**changes)[0], 400)
+
+    def test_committing_needs_a_signed_in_person_and_json(self):
+        status, _ = Client(self.port).json("POST", "/api/github/commit", {"repo": "acme/analyzers"})
+        self.assertEqual(status, 401)
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=30)
+        conn.request("POST", "/api/github/commit", body="repo=acme/analyzers",
+                     headers={"Cookie": self.client.cookie, "Content-Type": "application/x-www-form-urlencoded"})
+        self.assertEqual(conn.getresponse().status, 415)
+        conn.close()
 
 
 class DevelopmentToken(unittest.TestCase):

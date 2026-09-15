@@ -106,6 +106,7 @@ export async function selfTest(studio: Studio, options: { run: boolean }): Promi
 
 		await draftChecks(studio, check);
 		await githubChecks(studio, check, options.run);
+		await commitChecks(studio, check);
 		if (options.run) await runChecks(studio, check);
 	} catch (err) {
 		check("the self test ran to the end", false, err instanceof Error ? err.message : String(err));
@@ -185,6 +186,46 @@ async function githubChecks(studio: Studio, check: (name: string, ok: boolean, g
 		check("an analyzer opened from GitHub runs", result.status === "ok" && greetings === 3,
 			{ status: result.status, message: result.message, greetings });
 	}
+}
+
+// Against the stand-in GitHub again: commit the analyzer githubChecks opened.
+async function commitChecks(studio: Studio, check: (name: string, ok: boolean, got: unknown) => void): Promise<void> {
+	const source = studio.current?.source;
+	if (!studio.account?.github || !source) return;
+	const commitButton = document.getElementById("commit") as HTMLButtonElement;
+	// `hidden` may also be "until-found" (TypeScript's DOM types), so compare, do not pass it on.
+	check("with nothing changed there is no Commit button", commitButton.hidden === true, commitButton.hidden);
+
+	studio.openPath("spec/greeting.nlp");
+	const model = studio.editor.getModel()!;
+	const edited = `${model.getValue()}# changed in the self test\n`;
+	model.setValue(edited);
+	studio.flushDrafts();
+	check("changing an analyzer from GitHub shows Commit", !commitButton.hidden, commitButton.hidden);
+
+	studio.showCommitDialog();
+	const listed = [...document.querySelectorAll("#commit-files li")].map((li) => li.textContent);
+	check("the commit dialog lists the changed file where it is in the repository",
+		listed.length === 1 && listed[0] === `${source.folder}/spec/greeting.nlp`, listed);
+	(document.getElementById("commit-dialog") as HTMLDialogElement).close();
+
+	progress("committing to the stand-in GitHub");
+	const first = await studio.commitChanges("Change the greeting from the self test");
+	check("a commit goes on a new branch, with a pull request",
+		first.branch.startsWith("nlp-studio/selftest/hello-") && first.pullRequest?.number === 1, first);
+	studio.openPath("spec/greeting.nlp");
+	check("...and the analyzer reopens from that branch, holding the edit, with nothing left to commit",
+		studio.current?.source?.ref === first.branch && studio.current.source.commit === first.commit
+		&& studio.editor.getModel()!.getValue() === edited && studio.changedPaths().length === 0 && commitButton.hidden === true,
+		{ ref: studio.current?.source?.ref, changed: studio.changedPaths() });
+
+	const reopened = studio.editor.getModel()!;
+	reopened.setValue(`${reopened.getValue()}# and once more\n`);
+	progress("committing again to the same branch");
+	const second = await studio.commitChanges("Change it once more");
+	check("committing again adds to the same branch and pull request",
+		second.branch === first.branch && second.pullRequest?.number === first.pullRequest?.number
+		&& second.commit !== first.commit, second);
 }
 
 async function runChecks(studio: Studio, check: (name: string, ok: boolean, got: unknown) => void): Promise<void> {

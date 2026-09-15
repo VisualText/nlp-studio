@@ -18,6 +18,9 @@
     GET  /api/github/repos                               repositories the person can reach
     GET  /api/github/analyzers?repo=owner/name[&ref=]    the analyzers in one, at a commit
     GET  /api/github/analyzer?repo=&commit=&folder=      one analyzer's files
+    POST /api/github/commit     {"repo", "ref", "commit", "folder", "files": {path: text}, "message",
+                                 "description"?, "branch"?} -> {"branch", "commit", "pullRequest": {"number", "url"}}
+                                a new branch and pull request, or with "branch", more on that branch
 
 SIGNING IN. Set NLP_STUDIO_GITHUB_CLIENT_ID and NLP_STUDIO_GITHUB_CLIENT_SECRET (a GitHub
 App's), NLP_STUDIO_USERS (the invited GitHub logins, comma-separated) and
@@ -217,6 +220,8 @@ class Handler(SimpleHTTPRequestHandler):
             if sid:
                 srv.sessions.drop(sid)
             return self._json(200, {"signedIn": False}, {"Set-Cookie": self._cookie("", 0)})
+        if path == "/api/github/commit":
+            return self._commit()
         if path != "/api/run":
             return self._json(404, {"status": "invalid", "message": "No such API."})
         if srv.sign_in and not self._session():
@@ -243,6 +248,41 @@ class Handler(SimpleHTTPRequestHandler):
         finally:
             srv.gate.release()
         result["engine"] = srv.engine
+        self._json(200, result)
+
+    def _commit(self) -> None:
+        srv = self.server
+        if not (srv.sign_in or srv.dev_token):
+            return self._json(404, {"status": "invalid", "message": "GitHub is not set up on this server."})
+        session = self._session()
+        if not session:
+            return self._json(401, {"status": "unauthorized", "message": "Sign in with GitHub first."})
+        # JSON only: a form on another site cannot send it without asking first.
+        if not (self.headers.get("Content-Type") or "").startswith("application/json"):
+            return self._json(415, {"status": "invalid", "message": "Send the commit as JSON."})
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = -1
+        if length < 0 or length > MAX_BODY:
+            return self._json(413, {"status": "invalid", "message": f"A commit may be at most {MAX_BODY // nlp_run.MB} MB."})
+        try:
+            body = json.loads(self.rfile.read(length) or b"{}")
+            if not isinstance(body, dict):
+                raise ValueError
+        except ValueError:
+            return self._json(400, {"status": "invalid", "message": "The request is not a JSON object."})
+        try:
+            login = session.login
+            if srv.dev_token and not login:
+                srv.dev_login = login = srv.dev_login or srv.github.user(srv.dev_token)
+            result = srv.github.commit_analyzer(
+                session.token, str(body.get("repo", "")), str(body.get("ref", "")), str(body.get("commit", "")),
+                str(body.get("folder", "")), body.get("files"), str(body.get("message", "")),
+                branch=str(body["branch"]) if body.get("branch") else None,
+                description=str(body.get("description", "")), login=login)
+        except GitHubError as err:
+            return self._json(err.status, {"status": "github", "message": str(err)})
         self._json(200, result)
 
     def _me(self) -> None:

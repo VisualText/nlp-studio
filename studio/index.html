@@ -19,6 +19,7 @@
         </span>
         <span class="pick">
           <button id="download" type="button" title="Download this analyzer, with your edits, as a zip">Download</button>
+          <button id="commit" type="button" class="commit" title="Commit your changes to GitHub, with a pull request" hidden>Commit…</button>
           <button id="revert-all" type="button" title="Put every changed file back as it was opened" hidden>Revert all</button>
           <span id="changes" class="muted"></span>
         </span>
@@ -56,6 +57,26 @@
         <p id="github-note" class="muted"></p>
         <ol id="github-analyzers" class="github-analyzers"></ol>
         <div class="github-actions"><button value="cancel">Close</button></div>
+      </form>
+    </dialog>
+    <dialog id="commit-dialog" class="github-dialog" aria-labelledby="commit-title">
+      <form id="commit-form" class="github-form">
+        <h2 id="commit-title">Commit to GitHub</h2>
+        <p id="commit-where" class="muted"></p>
+        <ul id="commit-files" class="commit-files mono" aria-label="Changed files"></ul>
+        <label class="field">
+          <span>Message</span>
+          <input id="commit-message" type="text" required maxlength="200" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>Description <span class="muted">(optional, for the pull request)</span></span>
+          <textarea id="commit-description" rows="3"></textarea>
+        </label>
+        <p id="commit-result" class="commit-result" aria-live="polite"></p>
+        <div class="github-actions">
+          <button id="commit-cancel" type="button">Close</button>
+          <button id="commit-submit" type="submit" class="run">Commit</button>
+        </div>
       </form>
     </dialog>
     <script type="module" src="/src/main.ts"></script>

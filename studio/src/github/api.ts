@@ -96,6 +96,46 @@ export async function analyzerFiles(repo: string, commit: string, folder: string
 	return new Map(Object.entries(body.files));
 }
 
+export interface CommitRequest {
+	repo: string;
+	ref: string;                    // the branch the analyzer was opened from
+	commit: string;                 // the commit it was opened at: the commit's parent
+	folder: string;
+	files: Record<string, string>;  // the changed files, by path inside the analyzer
+	message: string;
+	description?: string;           // the pull request's text, when one is opened
+	branch?: string;                // add to this studio branch instead of opening a new one
+}
+
+export interface CommitResult {
+	branch: string;
+	commit: string;
+	pullRequest: { number: number; url: string } | null;
+}
+
+export async function commitChanges(request: CommitRequest): Promise<CommitResult> {
+	let res: Response;
+	try {
+		res = await fetch("api/github/commit", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(request),
+		});
+	} catch {
+		throw new GitHubApiError("The studio server did not answer.", 0);
+	}
+	let body: unknown = null;
+	try {
+		body = await res.json();
+	} catch {
+		// Not JSON: something other than the studio server answered.
+	}
+	if (!res.ok || body === null) {
+		throw new GitHubApiError((body as { message?: string } | null)?.message ?? `HTTP ${res.status}`, res.status);
+	}
+	return body as CommitResult;
+}
+
 const slug = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 // A name safe in a URI and stable across commits, so drafts follow the analyzer, not the sha.
