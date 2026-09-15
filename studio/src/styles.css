@@ -55,12 +55,20 @@ button.run { background: var(--accent); border-color: var(--accent); color: var(
 .files ol { list-style: none; margin: 0; padding: 0; }
 .files li { display: flex; flex-direction: column; padding: 2px 0; }
 .files li.off { opacity: .55; }
-.files li > button, .files li > span { text-align: left; border: 0; background: none; padding: 3px 6px; border-radius: 5px;
-	font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12.5px; white-space: pre; overflow: hidden;
-	text-overflow: ellipsis; }
-.files li > button:hover { background: var(--on); }
-.files li > button.on { background: var(--on); color: var(--on-ink); font-weight: 600; }
-.files li > span { color: var(--muted); }
+.files .file-row { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.files .file-row > button:not(.revert), .files .file-row > span { flex: 1; min-width: 0; text-align: left; border: 0;
+	background: none; padding: 3px 6px; border-radius: 5px; font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+	font-size: 12.5px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.files .file-row > button:not(.revert):hover { background: var(--on); }
+.files .file-row > button.on { background: var(--on); color: var(--on-ink); font-weight: 600; }
+.files .file-row > span { color: var(--muted); }
+/* A changed file: a mark after its name, and its revert button. */
+.files li.changed .file-row > button:not(.revert)::after { content: " ●"; color: var(--warning); }
+.files .revert { display: none; border: 0; background: none; padding: 2px 6px; color: var(--muted); font-size: 13px; }
+.files li.changed .revert { display: inline-block; }
+.files .revert:hover { background: var(--on); color: var(--ink); }
+#changes { font-size: 12.5px; }
+#changes.bad { color: var(--error); }
 .files small { color: var(--muted); padding: 0 6px 2px 24px; font-size: 11.5px; }
 
 .editor-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }

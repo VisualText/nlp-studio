@@ -40,8 +40,11 @@ Edit an analyzer and press **Run** (F5) to run it on the input file. Its output,
 problems and log appear under the editor: click a node in the tree to select its text, or its
 rule link to open the rule that built it. Without the run server the studio still edits —
 colouring, hover, go to definition, completion, rename and problems all run in the browser,
-the language features in the NLP++ language server from `vscode-nlp` in a Web Worker. Edits
-stay in the tab; nothing is saved.
+the language features in the NLP++ language server from `vscode-nlp` in a Web Worker.
+
+Edits are kept in your browser as you type, and come back when you open the analyzer again.
+Changed files are marked and can be reverted, and **Download** saves the analyzer — with your
+edits — as a zip of its folder, ready to open in VS Code.
 
 ```bash
 npm test                            # page unit tests

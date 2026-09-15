@@ -150,6 +150,24 @@ shares the host's network, as that host's firewall forces on the phase-1 contain
 it is not network-isolated. That is acceptable there only because everyone with the
 password already has a terminal on the same host through phase 1.
 
+### Keeping work (implemented)
+
+Edits are saved in the browser as they are typed (`studio/src/drafts.ts`). Each analyzer has
+one localStorage record holding only the files that differ from what was opened; it is
+written half a second after typing stops, and whenever the tab is hidden or closed, so
+nothing waits on a save button. Reopening the analyzer brings the edits back. Changed files
+are marked and can be reverted one at a time or all together, and **Download** zips the
+analyzer's folder with the edits in it. A browser that blocks storage, or has run out of it,
+is told so on screen rather than found out after a reload.
+
+Every opened file is held with `\n` line endings: that is what a draft is compared with,
+what is saved, what runs and what downloads. Otherwise a Windows checkout's CRLF, or a file
+with both, would look changed before anyone touched it.
+
+This is the first piece of the next step — an editor for invited people, with analyzers
+in GitHub repositories. Drafts hold the work between opening an analyzer from a repository
+and committing it back, on a branch with a pull request.
+
 ### Why the engine stays server-side
 
 The engine is a native C++ binary. `nlpplus` links it as a Node-API addon and runs calls

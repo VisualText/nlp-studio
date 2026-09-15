@@ -20,6 +20,7 @@
     "@shikijs/engine-javascript": "4.4.3",
     "@shikijs/monaco": "4.4.3",
     "@shikijs/themes": "4.4.3",
+    "fflate": "0.8.3",
     "monaco-editor": "0.56.0",
     "vscode-jsonrpc": "9.0.2",
     "vscode-languageserver-protocol": "3.18.3"

@@ -8,8 +8,10 @@
 //
 // `?selftest=run` adds the run checks; selftest.py asks for them when it has
 // started a run server for the page.
+import { strFromU8, unzipSync } from "fflate";
 import { monaco } from "./monaco";
 import { LANGUAGE_IDS } from "./highlight";
+import { DraftStore } from "./drafts";
 import { type Studio, RUN_MARKERS } from "./main";
 
 interface Check { name: string; ok: boolean; got: unknown }
@@ -93,6 +95,7 @@ export async function selfTest(studio: Studio, options: { run: boolean }): Promi
 			check("...and indexes the new analyzer's passes", kb.length > 0, `${other.name}: ${kb.length}`);
 		}
 
+		await draftChecks(studio, check);
 		if (options.run) await runChecks(studio, check);
 	} catch (err) {
 		check("the self test ran to the end", false, err instanceof Error ? err.message : String(err));
@@ -100,7 +103,40 @@ export async function selfTest(studio: Studio, options: { run: boolean }): Promi
 	return { ok: checks.every((c) => c.ok), checks };
 }
 
+async function draftChecks(studio: Studio, check: (name: string, ok: boolean, got: unknown) => void): Promise<void> {
+	// The language-feature checks above edited output.nlp; start from the sample as shipped.
+	studio.forgetDrafts("hello-studio");
+	await studio.openAnalyzer("hello-studio");
+	check("the sample opens with nothing changed", studio.changedPaths().length === 0, studio.changedPaths());
+
+	studio.openPath("spec/greeting.nlp");
+	const model = studio.editor.getModel()!;
+	const edited = `${model.getValue()}\n# a line written in the self test\n`;
+	model.setValue(edited);
+	studio.flushDrafts();
+	const stored = DraftStore.browser().load("hello-studio");
+	check("an edit is kept in this browser", stored?.files["spec/greeting.nlp"] === edited, Object.keys(stored?.files ?? {}));
+	const row = document.querySelector('#files button[data-path="spec/greeting.nlp"]')?.closest("li");
+	check("...and its file is marked changed", row?.classList.contains("changed") === true, row?.className);
+
+	await studio.openAnalyzer("hello-studio");
+	studio.openPath("spec/greeting.nlp");
+	check("opening the analyzer again brings the edit back", studio.editor.getModel()!.getValue() === edited,
+		studio.changedPaths());
+
+	const entries = unzipSync(studio.analyzerZip());
+	check("download zips the analyzer as its folder",
+		["hello-studio/spec/analyzer.seq", "hello-studio/kb/user/hier.kb", "hello-studio/input/hello.txt"]
+			.every((p) => p in entries), Object.keys(entries));
+	check("...with the edit in it", strFromU8(entries["hello-studio/spec/greeting.nlp"] ?? new Uint8Array()) === edited, null);
+
+	studio.revert("spec/greeting.nlp");
+	check("revert restores the file and forgets the draft",
+		studio.changedPaths().length === 0 && DraftStore.browser().load("hello-studio") === null, studio.changedPaths());
+}
+
 async function runChecks(studio: Studio, check: (name: string, ok: boolean, got: unknown) => void): Promise<void> {
+	studio.forgetDrafts("hello-studio");
 	await studio.openAnalyzer("hello-studio");
 	const result = await studio.run();
 	let greetings: unknown;
