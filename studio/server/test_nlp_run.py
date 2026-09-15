@@ -90,6 +90,15 @@ class Policy(unittest.TestCase):
     def test_an_escaped_hash_does_not_hide_a_call(self):
         self.assertEqual([p["line"] for p in self.calls('@CODE\nL("a") = "\\#"; \\# SYSTEM ("x");\n@@CODE\n')], [2])
 
+    def test_name_only_openfiles_are_found(self):
+        code = ('@CODE\nL("a") = openfile("output.json");\nL("b") = openfile("kb.json", "app");\n'
+                '# openfile("commented.json")\nL("c") = openfile(G("dir") + str(1));\n'
+                'L("d") = openfile(L("f"), "app");\nL("s") = "openfile(x)";\n@@CODE\n')
+        files = {"spec/analyzer.seq": "tokenize\tnil\nnlp\toutput\n", "spec/output.nlp": code}
+        found = nlp_run.name_only_openfiles(files, nlp_run.pass_files(files["spec/analyzer.seq"], files))
+        self.assertEqual([(c["file"], c["pass"], c["line"], c["name"]) for c in found],
+                         [("spec/output.nlp", 2, 2, "output.json"), ("spec/output.nlp", 2, 5, None)])
+
     def test_file_functions_stay_allowed(self):
         self.assertEqual(self.calls('@CODE\nL("f") = openfile("output.json");\nmkdir("kb");\n@@CODE\n'), [])
 
@@ -118,6 +127,17 @@ class Runs(unittest.TestCase):
         self.assertIn({"file": "spec/greeting.nlp", "pass": 3, "line": 5, "message": "Syntax error."}, result["problems"])
         self.assertIsNone(result["tree"])
 
+    @unittest.skipIf(sys.platform == "win32", "the Windows engine creates the file")
+    def test_on_linux_a_name_only_openfile_is_reported_where_it_wrote_nothing(self):
+        old = SAMPLE.joinpath("spec", "output.nlp").read_text(encoding="utf-8").replace(
+            'openfile("output.json","app")', 'openfile("output.json")')
+        result = nlp_run.run(sample_files() | {"spec/output.nlp": old}, TEXT)
+        self.assertEqual((result["status"], result["output"]), ("ok", {}), result)
+        [problem] = [p for p in result["problems"] if p["message"].startswith("openfile(")]
+        self.assertEqual((problem["file"], problem["pass"]), ("spec/output.nlp", 4))
+        self.assertIn('openfile("output.json")', old.splitlines()[problem["line"] - 1])
+        self.assertIn('Use openfile("output.json", "app")', problem["message"])
+
     def test_an_endless_loop_is_stopped(self):
         loop = '@CODE\nL("i") = 0;\nwhile (1) { L("i")++; }\n@@CODE\n'
         started = time.monotonic()
@@ -126,10 +146,20 @@ class Runs(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 10)
 
     def test_an_engine_crash_is_reported_not_raised(self):
-        files = {k: v for k, v in sample_files().items() if k != "kb/user/hier.kb"}
-        result = nlp_run.run(files, TEXT)
+        # What crashes the engine differs by platform -- on Windows an attribute
+        # written with no base knowledge base stops it; on Linux it only warns -- so
+        # a stand-in child dies the way a crashed engine does: a message, then an
+        # abnormal exit without the done marker.
+        import tempfile
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            dying = Path(tmp) / "dying_child.py"
+            dying.write_text('import os\nprint("[dict_add_word: Failed on name=count]", flush=True)\nos._exit(139)\n')
+            with mock.patch.object(nlp_run, "CHILD", dying):
+                result = nlp_run.run(sample_files(), TEXT)
         self.assertEqual(result["status"], "crashed", result)
-        self.assertIn("dict_add_word", result["message"] + "\n".join(result["log"]))
+        self.assertIn("exit code 139", result["message"])
+        self.assertIn("dict_add_word", result["message"])
 
     def test_a_blocked_call_is_refused_without_running(self):
         files = sample_files() | {"spec/output.nlp": '@CODE\nsystem("echo hi");\n@@CODE\n'}

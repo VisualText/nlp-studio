@@ -131,8 +131,10 @@ def main() -> int:
     threading.Thread(target=server.serve_forever, daemon=True).start()
     url = f"http://127.0.0.1:{server.server_address[1]}/index.html?selftest={'run' if run_proc else '1'}"
     profile = tempfile.mkdtemp(prefix="nlp-studio-selftest-")
+    # GitHub's Ubuntu runners restrict the user namespaces Chrome's sandbox needs.
+    sandbox = ["--no-sandbox"] if os.environ.get("CI") else []
     proc = subprocess.Popen(
-        [browser, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
+        [browser, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", *sandbox,
          f"--user-data-dir={profile}", "--window-size=1280,900", url],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     start = time.time()

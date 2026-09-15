@@ -1,0 +1,38 @@
+# NLP Studio (phase 2) on studio.visualtext.org/studio/ -- see INSTALL.md.
+#
+# update.sh builds and swaps the image; this file is how it runs. The restrictions
+# below are repeated in smoke-test.sh, which proves a candidate works under them,
+# so keep the two in step.
+
+name: nlp-studio-app
+
+services:
+  nlp-studio-app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: nlp-studio:app
+    container_name: nlp-studio-app
+    init: true
+    restart: unless-stopped
+
+    # Host networking, as for the phase-1 container (stopgap/docker-compose.yml):
+    # this host runs CSF, which drops forwarded traffic to the docker0 bridge on
+    # ports other than 80, so a published port connects and then resets. The cost
+    # is that this container is not network-isolated; see INSTALL.md.
+    network_mode: host
+    command: ["python", "server/app.py", "--host", "127.0.0.1", "--port", "3001", "--dist", "dist",
+              "--max-runs", "2", "--timeout", "10"]
+
+    # An analyzer's file functions can take any path. Here the only writable place
+    # is /tmp, where each run's own folder lives and is deleted after it.
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+    # A runaway pass must not starve the sites on this host.
+    cpus: 1.0
+    mem_limit: 1g
+    pids_limit: 128

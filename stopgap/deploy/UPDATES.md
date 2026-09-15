@@ -132,6 +132,15 @@ Run `Notify NLP-Studio` by hand from the Actions tab of any source repo
 `Deploy NLP-Studio` run should appear in `nlp-studio` within seconds and finish
 "up to date; nothing to do".
 
+## The phase-2 app at /studio/
+
+The same workflow also keeps the phase-2 studio current: after `update-studio.sh`
+it runs `studio/deploy/update.sh`, which rebuilds the `nlp-studio-app` container
+when this checkout's commit or the visualtext-files release has moved, with the
+same build, smoke-test, swap and roll-back steps. Until that script has been
+pulled onto the server, the step says so and does nothing. Installing it:
+[studio/deploy/INSTALL.md](../../studio/deploy/INSTALL.md).
+
 ## Security -- read before adding any trigger
 
 The runner executes whatever `nlp-studio`'s workflows say, as `visualtext`, on

@@ -97,6 +97,8 @@ _SECRET = re.compile(r"TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|API_?KEY|PRIVATE"
 # rule does not start a comment that would hide the rest of its line.
 _NOT_CODE = re.compile(r'\\.|"(?:\\.|[^"\\\n])*"|/\*.*?\*/|#[^\n]*', re.S)
 _CALL = re.compile(r"(?<![\w$])([A-Za-z_]\w*)\s*\(")
+_OPENFILE = re.compile(r"(?<![\w$])openfile\s*\(", re.I)
+_LITERAL_ARG = re.compile(r'\s*"([^"\\]*)"\s*\)')
 
 
 class RunError(ValueError):
@@ -162,14 +164,53 @@ def parse_log(text: str | None, pass_file: dict[int, str | None]) -> list[dict]:
     return problems
 
 
+def _code_only(text: str) -> str:
+    """The text with strings and comments blanked -- same length, same line breaks."""
+    return _NOT_CODE.sub(lambda m: m[0] if m[0].startswith("\\") else re.sub(r"[^\n]", " ", m[0]), text)
+
+
+def _pass_sources(files: dict[str, str]):
+    for path, text in sorted(files.items()):
+        if path.startswith("spec/") and path.lower().endswith((".nlp", ".pat")):
+            yield path, text
+
+
+def name_only_openfiles(files: dict[str, str], pass_file: dict[int, str | None]) -> list[dict]:
+    """Every openfile() given only a file name: {file, pass, line, name}.
+
+    `name` is the file name when it is a string literal, None when it is computed.
+    They matter on Linux: the engine opens such a file read-write (nlp-engine
+    lite/fn.cpp, fnOpenfile), which cannot create it, so the analyzer writes
+    nothing and says nothing. openfile(name, "app") works on every platform.
+    """
+    number = {f: n for n, f in pass_file.items() if f}
+    found = []
+    for path, text in _pass_sources(files):
+        code = _code_only(text)
+        for m in _OPENFILE.finditer(code):
+            depth, commas, i = 1, 0, m.end()
+            while i < len(code) and depth:
+                if code[i] == "(":
+                    depth += 1
+                elif code[i] == ")":
+                    depth -= 1
+                elif code[i] == "," and depth == 1:
+                    commas += 1
+                i += 1
+            if commas:
+                continue
+            literal = _LITERAL_ARG.match(text, m.end())
+            found.append({"file": path, "pass": number.get(path, 0), "line": code.count("\n", 0, m.start()) + 1,
+                          "name": literal[1] if literal else None})
+    return found
+
+
 def blocked_calls(files: dict[str, str], pass_file: dict[int, str | None]) -> list[dict]:
     """A problem for every call of a BLOCKED built-in in a pass file."""
     number = {f: n for n, f in pass_file.items() if f}
     found = []
-    for path, text in sorted(files.items()):
-        if not path.startswith("spec/") or not path.lower().endswith((".nlp", ".pat")):
-            continue
-        code = _NOT_CODE.sub(lambda m: m[0] if m[0].startswith("\\") else re.sub(r"[^\n]", " ", m[0]), text)
+    for path, text in _pass_sources(files):
+        code = _code_only(text)
         for m in _CALL.finditer(code):
             if m[1].lower() in BLOCKED:
                 found.append({
@@ -239,9 +280,23 @@ def run(files: dict[str, str], text: str, *, python: str = sys.executable, timeo
         if any(line.startswith("[Couldn't build analyzer") for line in log):
             return _result("failed", "The analyzer did not build. See Problems.", started, problems=problems, log=log)
 
+        output = _outputs(ana / "output")
+        if sys.platform != "win32":
+            # Silent on the engine's side, so said here: a name-only openfile() whose
+            # file did not appear (or, when the name is computed, when nothing did).
+            for call in name_only_openfiles(files, pass_file):
+                missing = call["name"] not in output if call["name"] is not None else not output
+                if missing:
+                    shown = f'"{call["name"]}"' if call["name"] is not None else "name"
+                    problems.append({
+                        "file": call["file"], "pass": call["pass"], "line": call["line"],
+                        "message": f'openfile({shown}) wrote nothing: on Linux the engine cannot create a file '
+                                   f'opened by name alone. Use openfile({shown}, "app").',
+                    })
+
         message = "Ran." if not problems else f"Ran, and reported {len(problems)} problem{'s' if len(problems) != 1 else ''}."
         return _result("ok", message, started, problems=problems, log=log,
-                       output=_outputs(ana / "output"), tree=_read(ana / "output" / "final.tree", MAX_TREE_BYTES) or None)
+                       output=output, tree=_read(ana / "output" / "final.tree", MAX_TREE_BYTES) or None)
     finally:
         shutil.rmtree(run_dir, ignore_errors=True)
 
@@ -290,7 +345,9 @@ def _read(path: Path, limit: int = 1 * MB) -> str | None:
     if not path.is_file():
         return None
     with open(path, "rb") as fh:
-        return fh.read(limit).decode("utf-8", "replace")
+        # The Linux engine ends each log line with a NUL before the newline
+        # ("3 5 [Syntax error.]\0\n"), which no line pattern expects.
+        return fh.read(limit).decode("utf-8", "replace").replace("\0", "")
 
 
 def _outputs(out_dir: Path) -> dict[str, str]:
