@@ -62,6 +62,21 @@ files. It listens on 127.0.0.1. Read
 [Running analyzers](docs/ARCHITECTURE.md#running-analyzers-implemented) before letting
 anyone else reach it.
 
+**Analyzers from GitHub.** Signed in with GitHub, **Open from GitHub** lists the repositories
+you can reach, finds every analyzer in one (any folder holding `spec/analyzer.seq`) and opens
+it, with your edits kept as drafts. The server does the signing in and holds the GitHub token —
+the page never sees it — so it needs a GitHub App, and in its environment:
+
+| Variable | |
+|---|---|
+| `NLP_STUDIO_GITHUB_CLIENT_ID`, `NLP_STUDIO_GITHUB_CLIENT_SECRET` | the GitHub App's |
+| `NLP_STUDIO_USERS` | the invited GitHub logins, comma-separated |
+| `NLP_STUDIO_PUBLIC_URL` | where the page is served, e.g. `https://studio.visualtext.org/studio` |
+
+With these set, running analyzers also needs a signed-in, invited person. On your own machine,
+`NLP_STUDIO_GITHUB_TOKEN=<a personal access token>` gives the GitHub calls that token instead,
+with no sign-in — never on a server anyone else can reach.
+
 Deploying beside the phase-1 editor, at studio.visualtext.org/studio/ behind the same
 password: [studio/deploy/INSTALL.md](studio/deploy/INSTALL.md).
 

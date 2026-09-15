@@ -12,6 +12,7 @@ import { strFromU8, unzipSync } from "fflate";
 import { monaco } from "./monaco";
 import { LANGUAGE_IDS } from "./highlight";
 import { DraftStore } from "./drafts";
+import { recent } from "./github/api";
 import { type Studio, RUN_MARKERS } from "./main";
 
 interface Check { name: string; ok: boolean; got: unknown }
@@ -34,9 +35,17 @@ function positionOf(model: monaco.editor.ITextModel, text: string, offset = 1): 
 	return new monaco.Position(match.range.startLineNumber, match.range.startColumn + offset);
 }
 
+// Tell selftest.py how far the page has got, as it goes, so a hang says where it is.
+export function progress(step: string): void {
+	void fetch("selftest-progress", { method: "POST", body: step, keepalive: true }).catch(() => undefined);
+}
+
 export async function selfTest(studio: Studio, options: { run: boolean }): Promise<{ ok: boolean; checks: Check[] }> {
 	const checks: Check[] = [];
-	const check = (name: string, ok: boolean, got: unknown) => checks.push({ name, ok, got });
+	const check = (name: string, ok: boolean, got: unknown) => {
+		checks.push({ name, ok, got });
+		progress(`${ok ? "ok " : "BAD"} ${name}`);
+	};
 
 	try {
 		check("the studio's own sample is listed", studio.analyzers.some((a) => a.name === "hello-studio"),
@@ -96,6 +105,7 @@ export async function selfTest(studio: Studio, options: { run: boolean }): Promi
 		}
 
 		await draftChecks(studio, check);
+		await githubChecks(studio, check, options.run);
 		if (options.run) await runChecks(studio, check);
 	} catch (err) {
 		check("the self test ran to the end", false, err instanceof Error ? err.message : String(err));
@@ -135,6 +145,48 @@ async function draftChecks(studio: Studio, check: (name: string, ok: boolean, go
 		studio.changedPaths().length === 0 && DraftStore.browser().load("hello-studio") === null, studio.changedPaths());
 }
 
+// Against the stand-in GitHub that selftest.py starts, holding the sample twice:
+// in samples/hello-studio, and deeper, in nested/deep/hello.
+async function githubChecks(studio: Studio, check: (name: string, ok: boolean, got: unknown) => void,
+	withRun: boolean): Promise<void> {
+	if (!studio.account?.github) return; // this server has no GitHub: nothing to check
+	check("the page knows who GitHub says you are", studio.account.signedIn && !!studio.account.login, studio.account);
+
+	progress("opening the GitHub dialog");
+	await studio.showGitHubDialog();
+	const repos = [...document.querySelectorAll<HTMLOptionElement>("#github-repo option")].map((o) => o.value);
+	check("Open from GitHub lists the repositories you can reach", repos.includes("acme/analyzers"), repos);
+
+	progress("listing the analyzers in acme/analyzers");
+	await studio.listGitHubAnalyzers("acme/analyzers", "main");
+	const buttons = [...document.querySelectorAll<HTMLButtonElement>("#github-analyzers button")];
+	const folders = buttons.map((b) => b.dataset.folder);
+	check("...and the analyzers in one, wherever they sit",
+		folders.includes("samples/hello-studio") && folders.includes("nested/deep/hello"), folders);
+
+	buttons.find((b) => b.dataset.folder === "nested/deep/hello")?.click();
+	const opened = await until(() => studio.current?.source?.folder, (f) => f === "nested/deep/hello");
+	check("clicking one opens it from GitHub", opened === "nested/deep/hello" && !(document.getElementById("github-dialog") as HTMLDialogElement).open,
+		studio.current?.name);
+	check("...with its passes, knowledge base and input", studio.passList.some((p) => p.name === "greeting")
+		&& studio.current!.files.includes("kb/user/hier.kb") && studio.inputPath === "input/hello.txt", studio.current?.files);
+	check("...and it is remembered for next time", recent().some((r) => r.repo === "acme/analyzers" && r.folder === "nested/deep/hello"),
+		recent());
+
+	if (withRun) {
+		progress("running the analyzer opened from GitHub");
+		const result = await studio.run();
+		let greetings: unknown;
+		try {
+			greetings = JSON.parse(result.output?.["output.json"] ?? "null")?.greetings;
+		} catch {
+			greetings = undefined;
+		}
+		check("an analyzer opened from GitHub runs", result.status === "ok" && greetings === 3,
+			{ status: result.status, message: result.message, greetings });
+	}
+}
+
 async function runChecks(studio: Studio, check: (name: string, ok: boolean, got: unknown) => void): Promise<void> {
 	studio.forgetDrafts("hello-studio");
 	await studio.openAnalyzer("hello-studio");
@@ -171,7 +223,7 @@ async function runChecks(studio: Studio, check: (name: string, ok: boolean, got:
 	const failed = await studio.run();
 	const problem = failed.problems?.find((p) => p.message.includes("Unknown fn"));
 	check("a run error names its pass file and line", problem?.file === "spec/output.nlp" && problem.line === 2,
-		failed.problems);
+		{ status: failed.status, message: failed.message, ms: failed.ms, problems: failed.problems });
 	const runMarkers = monaco.editor.getModelMarkers({ owner: RUN_MARKERS, resource: output.uri });
 	check("...and marks that line in the editor", runMarkers.some((m) => m.startLineNumber === 2),
 		runMarkers.map((m) => m.startLineNumber));

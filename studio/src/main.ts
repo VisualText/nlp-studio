@@ -4,7 +4,8 @@
 //   lsp/client.ts  hover, definition, references, completion, rename, formatting,
 //                  quick fixes and problems, from the extension's language server
 //                  running in a Web Worker
-//   analyzers.ts   the analyzers to open, fetched as static files
+//   analyzers.ts   the analyzers to open: the studio's samples, and (github/) any in a
+//                  GitHub repository the person signed in can reach
 //   drafts.ts      edits kept in this browser, until downloaded (zipfiles.ts)
 //   run/           running one: its files go to the run server (server/app.py), and
 //                  the output, parse tree and problems come back
@@ -15,11 +16,15 @@ import { installHighlighting, THEMES } from "./highlight";
 import { NlpLanguageClient, installLanguageFeatures } from "./lsp/client";
 import { languageFor } from "./lsp/convert";
 import { type AnalyzerEntry, type Pass, fileUri, loadFiles, loadIndex, passes, pathOf } from "./analyzers";
+import {
+	type Account, type FoundAnalyzer, type RecentAnalyzer, type RepoAnalyzers, type Repository,
+	SIGN_IN_URL, account, analyzersIn, entryName, recent, remember, repositories, signOut,
+} from "./github/api";
 import { DraftStore } from "./drafts";
 import { safeFolder, zipAnalyzer } from "./zipfiles";
 import { type RunResult, runAnalyzer, serverHealth } from "./run/api";
 import { RunPanel } from "./run/panel";
-import { selfTest } from "./selftest";
+import { progress, selfTest } from "./selftest";
 
 (self as unknown as { MonacoEnvironment: monaco.Environment }).MonacoEnvironment = {
 	getWorker: () => new EditorWorker(),
@@ -39,6 +44,16 @@ function darkTheme(): boolean {
 	return set ? set === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
+const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+function button(text: string, onClick: () => void): HTMLButtonElement {
+	const b = document.createElement("button");
+	b.type = "button";
+	b.textContent = text;
+	b.addEventListener("click", onClick);
+	return b;
+}
+
 export class Studio {
 	analyzers: AnalyzerEntry[] = [];
 	current: AnalyzerEntry | undefined;
@@ -46,6 +61,7 @@ export class Studio {
 	// The input a run reads: the input file opened last, or the analyzer's first.
 	inputPath: string | undefined;
 	passList: Pass[] = [];
+	account: Account | null = null;
 	readonly editor: monaco.editor.IStandaloneCodeEditor;
 	readonly panel: RunPanel;
 	readonly drafts = DraftStore.browser();
@@ -53,6 +69,7 @@ export class Studio {
 	// Each file's text as it was opened, before any draft: what "changed" and "revert" mean.
 	private readonly originals = new Map<string, string>();
 	private readonly pendingSaves = new Map<string, ReturnType<typeof setTimeout>>();
+	private repos: Repository[] = [];
 	private draftsKept = true;
 	private running = false;
 
@@ -101,6 +118,16 @@ export class Studio {
 		document.addEventListener("visibilitychange", () => {
 			if (document.visibilityState === "hidden") this.flushDrafts();
 		});
+
+		byId("github-repo").addEventListener("change", () => {
+			const repo = this.repos.find((r) => r.fullName === byId<HTMLSelectElement>("github-repo").value);
+			if (repo) void this.listGitHubAnalyzers(repo.fullName, repo.defaultBranch);
+		});
+	}
+
+	// Tell the person something in the header, in place of the status line.
+	say(text: string): void {
+		byId("status").textContent = text;
 	}
 
 	async openAnalyzer(name: string): Promise<void> {
@@ -138,6 +165,7 @@ export class Studio {
 		this.inputPath = entry.files.find((f) => f.startsWith("input/"));
 		this.panel.clear();
 		this.renderFiles();
+		this.renderChoices();
 		this.showRunTarget();
 		this.showChanges();
 		const first = this.passList.find((p) => p.file && p.active)?.file;
@@ -154,7 +182,9 @@ export class Studio {
 			this.inputPath = path;
 			this.showRunTarget();
 		}
-		byId("path").textContent = `${this.current.title} / ${path}`;
+		const source = this.current.source;
+		const where = source ? `${source.repo} @ ${source.commit.slice(0, 7)} / ` : "";
+		byId("path").textContent = `${where}${this.current.title} / ${path}`;
 		for (const el of byId("files").querySelectorAll<HTMLElement>("button[data-path]")) {
 			el.classList.toggle("on", el.dataset.path === path);
 		}
@@ -174,6 +204,171 @@ export class Studio {
 		const model = this.models.get(path);
 		if (!model) return;
 		this.openPath(path, monaco.Range.fromPositions(model.getPositionAt(from), model.getPositionAt(to)));
+	}
+
+	// ---- GitHub ----------------------------------------------------------------------
+
+	renderAccount(): void {
+		const el = byId("account");
+		el.replaceChildren();
+		const who = this.account;
+		if (!who?.github) return;
+		if (!who.signedIn) {
+			const link = document.createElement("a");
+			link.href = SIGN_IN_URL;
+			link.className = "button";
+			link.textContent = "Sign in with GitHub";
+			el.append(link);
+			return;
+		}
+		const open = button("Open from GitHub", () => void this.showGitHubDialog());
+		open.id = "github-open";
+		const name = document.createElement("span");
+		name.className = "muted";
+		name.textContent = who.login ? `@${who.login}` : "";
+		el.append(open, name);
+		if (who.signIn) {
+			el.append(button("Sign out", () => void signOut().then(() => location.reload())));
+		}
+	}
+
+	async showGitHubDialog(): Promise<void> {
+		const dialog = byId<HTMLDialogElement>("github-dialog");
+		const select = byId<HTMLSelectElement>("github-repo");
+		const note = byId("github-note");
+		if (!dialog.open) dialog.showModal();
+		select.replaceChildren();
+		byId("github-analyzers").replaceChildren();
+		note.textContent = "Looking for the repositories you can reach…";
+		try {
+			this.repos = await repositories();
+		} catch (err) {
+			note.textContent = messageOf(err);
+			return;
+		}
+		for (const repo of this.repos) {
+			const option = document.createElement("option");
+			option.value = repo.fullName;
+			option.textContent = repo.private ? `${repo.fullName} (private)` : repo.fullName;
+			select.append(option);
+		}
+		if (!this.repos.length) {
+			note.textContent = "No repositories are shared with NLP Studio for your account.";
+			return;
+		}
+		await this.listGitHubAnalyzers(this.repos[0].fullName, this.repos[0].defaultBranch);
+	}
+
+	async listGitHubAnalyzers(repo: string, ref: string): Promise<void> {
+		const select = byId<HTMLSelectElement>("github-repo");
+		const note = byId("github-note");
+		const list = byId("github-analyzers");
+		select.value = repo;
+		list.replaceChildren();
+		note.textContent = `Looking for analyzers in ${repo}…`;
+		let listing: RepoAnalyzers;
+		try {
+			listing = await analyzersIn(repo, ref);
+		} catch (err) {
+			if (select.value === repo) note.textContent = messageOf(err);
+			return;
+		}
+		if (select.value !== repo) return; // another repository was chosen meanwhile
+		const n = listing.analyzers.length;
+		note.textContent = n
+			? `${n} analyzer${n === 1 ? "" : "s"} on ${listing.ref} (${listing.commit.slice(0, 7)})`
+			: `No analyzers in ${repo}: an analyzer is a folder holding spec/analyzer.seq.`;
+		for (const found of listing.analyzers) {
+			const item = document.createElement("li");
+			const b = button("", () => {
+				byId<HTMLDialogElement>("github-dialog").close();
+				void this.openFromGitHub(listing, found);
+			});
+			b.dataset.folder = found.folder;
+			const label = document.createElement("span");
+			label.textContent = found.folder || "(the top of the repository)";
+			const count = document.createElement("small");
+			count.textContent = `${found.files.length} files`;
+			b.append(label, count);
+			item.append(b);
+			list.append(item);
+		}
+	}
+
+	async openFromGitHub(listing: RepoAnalyzers, found: FoundAnalyzer): Promise<void> {
+		const entry: AnalyzerEntry = {
+			name: entryName(listing.repo, listing.ref, found.folder),
+			title: found.title,
+			origin: "github",
+			files: found.files,
+			source: { repo: listing.repo, ref: listing.ref, commit: listing.commit, folder: found.folder },
+		};
+		this.analyzers = [...this.analyzers.filter((a) => a.name !== entry.name), entry];
+		remember({ repo: listing.repo, ref: listing.ref, folder: found.folder, title: found.title });
+		// Where it came from shows in the path bar (repository @ commit); the header only
+		// says so while it loads, or if it could not.
+		const before = byId("status").textContent ?? "";
+		this.say(`Opening ${found.title} from ${listing.repo}…`);
+		try {
+			await this.openAnalyzer(entry.name);
+			this.say(before);
+		} catch (err) {
+			this.say(`Could not open ${found.title} from ${listing.repo}: ${messageOf(err)}`);
+		}
+	}
+
+	// Reopen a remembered GitHub analyzer, at the branch's latest commit.
+	async openRecent(item: RecentAnalyzer): Promise<void> {
+		this.say(`Opening ${item.title} from ${item.repo}…`);
+		try {
+			const listing = await analyzersIn(item.repo, item.ref);
+			const found = listing.analyzers.find((a) => a.folder === item.folder);
+			if (!found) throw new Error(`there is no longer an analyzer at ${item.folder || "the top"} on ${listing.ref}`);
+			await this.openFromGitHub(listing, found);
+		} catch (err) {
+			this.say(`Could not open ${item.title} from ${item.repo}: ${messageOf(err)}`);
+			this.renderChoices();
+		}
+	}
+
+	// The analyzer menu: the samples, then GitHub analyzers opened now or before.
+	renderChoices(): void {
+		const select = byId<HTMLSelectElement>("analyzer");
+		select.replaceChildren();
+		const group = (label: string) => {
+			const g = document.createElement("optgroup");
+			g.label = label;
+			select.append(g);
+			return g;
+		};
+		const add = (parent: HTMLElement, value: string, text: string) => {
+			const option = document.createElement("option");
+			option.value = value;
+			option.textContent = text;
+			parent.append(option);
+			return option;
+		};
+		const samples = group("Samples");
+		for (const a of this.analyzers.filter((a) => !a.source)) {
+			add(samples, a.name, a.origin === "template" ? `${a.title} (template)` : a.title);
+		}
+		const opened = this.analyzers.filter((a) => a.source);
+		const remembered = this.account?.github ? recent() : [];
+		if (opened.length || remembered.length) {
+			const gh = group("GitHub");
+			const shown = new Set<string>();
+			for (const a of opened) {
+				add(gh, a.name, `${a.title} · ${a.source!.repo}`);
+				shown.add(a.name);
+			}
+			for (const r of remembered) {
+				const name = entryName(r.repo, r.ref, r.folder);
+				if (shown.has(name)) continue;
+				add(gh, `recent:${name}`, `${r.title} · ${r.repo}`).dataset.recent = JSON.stringify(r);
+				shown.add(name);
+			}
+		}
+		if (this.current) select.value = this.current.name;
 	}
 
 	// ---- Drafts --------------------------------------------------------------------
@@ -244,8 +439,8 @@ export class Studio {
 
 	private showChanges(): void {
 		const changed = new Set(this.changedPaths());
-		for (const button of byId("files").querySelectorAll<HTMLElement>("button[data-path]")) {
-			button.closest("li")?.classList.toggle("changed", changed.has(button.dataset.path!));
+		for (const b of byId("files").querySelectorAll<HTMLElement>("button[data-path]")) {
+			b.closest("li")?.classList.toggle("changed", changed.has(b.dataset.path!));
 		}
 		const note = byId("changes");
 		byId("revert-all").hidden = changed.size === 0;
@@ -351,14 +546,11 @@ export class Studio {
 			if (path) {
 				b.dataset.path = path;
 				b.addEventListener("click", () => this.openPath(path));
-				const revert = document.createElement("button");
-				revert.className = "revert";
-				revert.type = "button";
-				revert.textContent = "↺";
-				revert.title = `Revert ${path} to how it was opened`;
-				revert.addEventListener("click", () => {
+				const revert = button("↺", () => {
 					if (window.confirm(`Revert ${path}? Your edits to it will be lost.`)) this.revert(path);
 				});
+				revert.className = "revert";
+				revert.title = `Revert ${path} to how it was opened`;
 				row.append(revert);
 			}
 			li.append(row);
@@ -406,23 +598,36 @@ export class Studio {
 	}
 }
 
+// Under the self test, each stage of starting up is reported, so a hang says where.
+const selfTesting = new URLSearchParams(location.search).has("selftest");
+const step = (text: string) => {
+	if (selfTesting) progress(text);
+};
+
 async function main(): Promise<void> {
-	const status = byId("status");
+	step("page script started");
 	const client = new NlpLanguageClient("language-server/browserServer.js");
 	await Promise.all([installHighlighting(), client.start()]);
 	installLanguageFeatures(client);
+	step("colouring and language server ready");
 
 	const studio = new Studio(client);
-	studio.analyzers = await loadIndex();
+	const [analyzers, who] = await Promise.all([loadIndex(), account()]);
+	step(`analyzer list and account loaded (${analyzers.length} analyzers, github=${who.github})`);
+	studio.analyzers = analyzers;
+	studio.account = who;
+	studio.renderAccount();
+	studio.renderChoices();
 
 	const select = byId<HTMLSelectElement>("analyzer");
-	for (const a of studio.analyzers) {
-		const option = document.createElement("option");
-		option.value = a.name;
-		option.textContent = a.origin === "template" ? `${a.title} (template)` : a.title;
-		select.append(option);
-	}
-	select.addEventListener("change", () => void studio.openAnalyzer(select.value));
+	select.addEventListener("change", () => {
+		const remembered = select.selectedOptions[0]?.dataset.recent;
+		if (remembered) {
+			void studio.openRecent(JSON.parse(remembered) as RecentAnalyzer);
+		} else {
+			void studio.openAnalyzer(select.value).catch((err) => studio.say(`Could not open it: ${messageOf(err)}`));
+		}
+	});
 
 	byId("theme").addEventListener("click", () => {
 		document.documentElement.dataset.theme = darkTheme() ? "light" : "dark";
@@ -433,11 +638,12 @@ async function main(): Promise<void> {
 		serverHealth(),
 		studio.analyzers.length ? studio.openAnalyzer(studio.analyzers[0].name) : undefined,
 	]);
+	step(`first analyzer open, run server ${health ? "answering" : "not answering"}`);
 	// Whether edits are kept is shown beside the changed-file count; here only when it cannot be.
 	const kept = studio.drafts.available ? "" : "This browser blocks storage, so edits are not kept. ";
-	status.textContent = health
+	studio.say(health
 		? `${kept}Run (F5) uses NLPPlus ${health.engine ?? "of an unknown version"}.`
-		: `${kept}Running needs the run server: see the README.`;
+		: `${kept}Running needs the run server: see the README.`);
 
 	const params = new URLSearchParams(location.search);
 	if (params.has("selftest")) {
@@ -447,6 +653,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-	byId("status").textContent = `Could not start: ${err instanceof Error ? err.message : String(err)}`;
+	byId("status").textContent = `Could not start: ${messageOf(err)}`;
+	step(`could not start: ${messageOf(err)}`);
 	console.error(err);
 });

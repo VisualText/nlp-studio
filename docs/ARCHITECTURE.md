@@ -168,6 +168,30 @@ This is the first piece of the next step — an editor for invited people, with 
 in GitHub repositories. Drafts hold the work between opening an analyzer from a repository
 and committing it back, on a branch with a pull request.
 
+### Analyzers from GitHub (opening implemented; committing next)
+
+The editor is for invited people, and their analyzers live in GitHub repositories.
+
+- **Signing in is the server's.** GitHub will not exchange a sign-in code from a browser —
+  `github.com/login/oauth/access_token` sends no CORS headers — so `server/app.py` runs a
+  GitHub App's sign-in: the redirect with a one-time state, the code exchange, and a check of
+  the login against `NLP_STUDIO_USERS`. The token goes into an in-memory session behind an
+  HttpOnly, SameSite=Lax cookie (Secure on https) and is refreshed when it expires. A restart
+  signs everyone out; no token touches the disk.
+- **The page never holds a token.** `api.github.com` would accept calls from the page, but the
+  server makes them (`server/github.py`), so nothing in an analyzer file the editor renders can
+  reach it. So far: the repositories the app reaches for this person, the analyzers in one at a
+  commit, and one analyzer's files.
+- **An analyzer is any folder holding `spec/analyzer.seq`,** at any depth, read at the commit it
+  was listed at. Only its `spec/`, `kb/` and `input/` travel, as for the samples.
+- **Drafts follow the repository, branch and folder**, not the commit, so edits carry over when
+  the branch moves on. Opened analyzers are remembered in the browser and reopen at the branch's
+  latest commit.
+- With sign-in configured, running analyzers needs a signed-in person too.
+- The whole flow is tested against a stand-in GitHub (`server/fake_github.py`): sign-in,
+  refusal of anyone not invited, token refresh and reading in `server/test_github.py`, and
+  opening and running an analyzer from a repository in the browser self test.
+
 ### Why the engine stays server-side
 
 The engine is a native C++ binary. `nlpplus` links it as a Node-API addon and runs calls
