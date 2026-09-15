@@ -179,9 +179,10 @@ def name_only_openfiles(files: dict[str, str], pass_file: dict[int, str | None])
     """Every openfile() given only a file name: {file, pass, line, name}.
 
     `name` is the file name when it is a string literal, None when it is computed.
-    They matter on Linux: the engine opens such a file read-write (nlp-engine
-    lite/fn.cpp, fnOpenfile), which cannot create it, so the analyzer writes
-    nothing and says nothing. openfile(name, "app") works on every platform.
+    They matter on Linux with NLPPlus 2.2.37 and earlier: that engine opened such a
+    file read-write, which cannot create it, so the analyzer wrote nothing and said
+    nothing. Fixed in nlp-engine 4.1.3, released as NLPPlus 2.2.38
+    (VisualText/nlp-engine#742); openfile(name, "app") works with every version.
     """
     number = {f: n for n, f in pass_file.items() if f}
     found = []
@@ -290,8 +291,8 @@ def run(files: dict[str, str], text: str, *, python: str = sys.executable, timeo
                     shown = f'"{call["name"]}"' if call["name"] is not None else "name"
                     problems.append({
                         "file": call["file"], "pass": call["pass"], "line": call["line"],
-                        "message": f'openfile({shown}) wrote nothing: on Linux the engine cannot create a file '
-                                   f'opened by name alone. Use openfile({shown}, "app").',
+                        "message": f'openfile({shown}) wrote nothing: on Linux, NLPPlus before 2.2.38 cannot create '
+                                   f'a file opened by name alone. Upgrade, or use openfile({shown}, "app").',
                     })
 
         message = "Ran." if not problems else f"Ran, and reported {len(problems)} problem{'s' if len(problems) != 1 else ''}."

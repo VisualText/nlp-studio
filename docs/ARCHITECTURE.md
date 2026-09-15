@@ -109,11 +109,12 @@ files the analyzer wrote, the final parse tree, problems, and the engine's log.
   selects correctly.
 - **The Linux engine is not the Windows one** — measured on NLPPlus 2.2.37 in CI and WSL,
   and it matters because the deployed server is Linux:
-  - `openfile("name")` creates nothing. The Linux build opens the file read-write
-    (`nlp-engine lite/fn.cpp`, `fnOpenfile`), which cannot create one, and the analyzer
-    carries on without a word. `openfile("name", "app")` works everywhere — the engine
-    empties `output/` before each run, so appending starts from nothing — and the run
-    server reports a name-only `openfile()` whose file did not appear, at its line.
+  - `openfile("name")` created nothing before nlp-engine 4.1.3: the Linux build opened
+    the file read-write (`lite/fn.cpp`, `fnOpenfile`), which cannot create one, and the
+    analyzer carried on without a word. Fixed in VisualText/nlp-engine#742 and released
+    as NLPPlus 2.2.38, which the run server pins. For an older engine the server still
+    reports a name-only `openfile()` whose file did not appear, at its line;
+    `openfile("name", "app")` works with every version.
   - Log lines end with a NUL byte before the newline; the server strips it.
   - A missing base knowledge base only warns, where on Windows it stops the engine.
 
