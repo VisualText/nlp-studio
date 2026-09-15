@@ -1,0 +1,24 @@
+###############################################
+# FILE: funcs
+# SUBJ: Helper functions the other passes call
+#
+# A function declared in @DECL here can be called from any later pass.
+# In NLP Studio, go to definition on AddGreeting in greeting.nlp lands here.
+###############################################
+
+@DECL
+
+# Count one greeting under the "greetings" concept in the knowledge base,
+# and keep the words it was found in.
+AddGreeting(L("text")) {
+	L("root") = getconcept(findroot(),"greetings");
+	L("count") = numval(L("root"),"count") + 1;
+	if (L("count") == 1)
+		addnumval(L("root"),"count",1);
+	else
+		replaceval(L("root"),"count",L("count"));
+	L("con") = makeconcept(L("root"),"greeting" + str(L("count")));
+	addstrval(L("con"),"text",L("text"));
+}
+
+@@DECL

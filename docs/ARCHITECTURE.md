@@ -46,6 +46,40 @@ This is the single largest reuse win in the project, and the reason to prefer Mo
 Ace or CodeMirror (both of which are already cloned under `c:\git` from earlier
 exploration, and neither of which consumes VS Code grammars or themes).
 
+### Language features run in the browser (implemented)
+
+The first slice of phase 2 is the editor, in [../studio/](../studio/), and it needs no server.
+
+```
+┌──────────────────────────── browser tab ────────────────────────────┐
+│  Monaco (editor core only)          Web Worker                      │
+│   ├─ shiki + the 7 TextMate  ─┐                                     │
+│   │  grammars → colouring      │    NLP++ language server           │
+│   └─ lsp/client.ts ────────────┼──▶ (vscode-nlp browserServer.js)   │
+│        providers ◀─ JSON-RPC ──┘     indexes the open analyzer      │
+│  analyzer list, passes, KB, input ◀── static files (analyzers/)     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+- **The language server is the extension's.** `vscode-nlp` 4.2.0 builds its server twice:
+  for Node (the extension) and as `dist/browserServer.js`, a Web Worker that reads the
+  workspace from `nlp/workspaceFiles` notifications instead of the disk. The studio commits
+  that bundle (`studio/public/language-server/`, with its source commit) so hover text,
+  diagnostics and quick fixes are the extension's, not a second implementation.
+- **A small client, not `monaco-languageclient`.** That package runs much of VS Code's
+  workbench inside the page. One language needs a dozen requests, each mapped to a Monaco
+  provider in `studio/src/lsp/client.ts`, with the conversions unit-tested.
+- **Monaco without its languages.** `studio/src/monaco.ts` imports the editor API and its
+  features, not the TypeScript/CSS/HTML/JSON services or Monarch grammars.
+- **One workspace at a time.** Opening an analyzer replaces the server's files
+  (`replace: true`); edits are sent as they happen and "saved" after a pause, so a new
+  function is known to every pass without pressing save.
+- **Checked in a real browser.** `npm run selftest` opens the build headless and the page
+  checks itself through the editor: go to definition across passes, hover, completion,
+  outline, a misspelled call flagged with its fix, and switching analyzers.
+
+Running an analyzer is the next slice and is where the server below comes in.
+
 ### Why the engine stays server-side
 
 The engine is a native C++ binary. `nlpplus` links it as a Node-API addon and runs calls

@@ -11,7 +11,7 @@ see the parse tree — with no install, no C++ toolchain, and no VS Code.
 | Phase | What | State |
 |---|---|---|
 | **1. Stopgap** | `openvscode-server` container with the real `dehilster.nlp` extension baked in | **in this repo** — see [stopgap/](stopgap/) |
-| **2. Studio** | Purpose-built web app: Monaco front end + Node API server hosting the engine in-process | designed, not started |
+| **2. Studio** | Purpose-built web app: Monaco front end + Node API server hosting the engine in-process | **started** — the editor, in [studio/](studio/); running analyzers is next |
 | **3. Client-side** | Emscripten/WASM build of the engine for zero-server demos | speculative |
 
 Phase 1 exists to have something live quickly — a "Try NLP++" button for
@@ -20,6 +20,26 @@ browser tab, at the cost of one container per user. It is deliberately **not** t
 
 Phase 2 is the product. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and
 the reasoning behind it.
+
+## Quick start (phase 2 editor)
+
+Requires Node 20+. A checkout of
+[`analyzer-templates`](https://github.com/VisualText/analyzer-templates) next to this repo
+(`../analyzer-templates`) adds five templates to the analyzer list; without it the studio
+opens its own sample only.
+
+```bash
+cd studio
+npm install
+npm run dev                  # http://localhost:5173
+npm test                     # unit tests
+npm run build && npm run selftest   # the built page, checked in headless Edge or Chrome
+```
+
+It is a static site: `npm run build` writes `studio/dist/`, which any web server can host.
+Everything — colouring, hover, go to definition, completion, rename, problems — runs in the
+browser, the language features in the NLP++ language server from `vscode-nlp` running in a
+Web Worker. Edits stay in the tab; nothing is saved or run yet.
 
 ## Quick start (phase 1)
 

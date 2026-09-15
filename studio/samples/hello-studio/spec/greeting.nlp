@@ -1,0 +1,17 @@
+###############################################
+# FILE: greeting
+# SUBJ: Find greetings such as "hello world"
+###############################################
+
+@NODES _ROOT
+
+@POST
+	AddGreeting(phrasetext());
+	single();
+
+@RULES
+_greeting <-
+	_xWILD [one match=(hello hi hey)]
+	_xWHITE [star]
+	_xWILD [one match=(world there everyone)]
+	@@

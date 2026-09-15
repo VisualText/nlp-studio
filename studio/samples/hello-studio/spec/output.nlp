@@ -1,0 +1,11 @@
+###############################################
+# FILE: output
+# SUBJ: Write what was found to output.json
+###############################################
+
+@CODE
+L("root") = getconcept(findroot(),"greetings");
+L("out") = openfile("output.json");
+L("out") << "{\"greetings\": " << numval(L("root"),"count") << "}";
+closefile(L("out"));
+@@CODE
