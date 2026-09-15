@@ -5,10 +5,9 @@
 //                  quick fixes and problems, from the extension's language server
 //                  running in a Web Worker
 //   analyzers.ts   the analyzers to open, fetched as static files
+//   drafts.ts      edits kept in this browser, until downloaded (zipfiles.ts)
 //   run/           running one: its files go to the run server (server/app.py), and
 //                  the output, parse tree and problems come back
-//
-// Edits stay in the tab; nothing is saved.
 import "./styles.css";
 import EditorWorker from "monaco-editor/editor/editor.worker.js?worker";
 import { monaco } from "./monaco";
@@ -16,6 +15,8 @@ import { installHighlighting, THEMES } from "./highlight";
 import { NlpLanguageClient, installLanguageFeatures } from "./lsp/client";
 import { languageFor } from "./lsp/convert";
 import { type AnalyzerEntry, type Pass, fileUri, loadFiles, loadIndex, passes, pathOf } from "./analyzers";
+import { DraftStore } from "./drafts";
+import { safeFolder, zipAnalyzer } from "./zipfiles";
 import { type RunResult, runAnalyzer, serverHealth } from "./run/api";
 import { RunPanel } from "./run/panel";
 import { selfTest } from "./selftest";
@@ -30,6 +31,8 @@ const INDEXED = /\.(nlp|pat|kbb)$/i;
 // The last run's problems, as markers kept apart from the language server's so
 // each set can be replaced without touching the other.
 export const RUN_MARKERS = "nlp++ run";
+// How long typing may pause before the draft is saved.
+const SAVE_AFTER_MS = 500;
 
 function darkTheme(): boolean {
 	const set = document.documentElement.dataset.theme;
@@ -45,7 +48,12 @@ export class Studio {
 	passList: Pass[] = [];
 	readonly editor: monaco.editor.IStandaloneCodeEditor;
 	readonly panel: RunPanel;
+	readonly drafts = DraftStore.browser();
 	private readonly models = new Map<string, monaco.editor.ITextModel>();
+	// Each file's text as it was opened, before any draft: what "changed" and "revert" mean.
+	private readonly originals = new Map<string, string>();
+	private readonly pendingSaves = new Map<string, ReturnType<typeof setTimeout>>();
+	private draftsKept = true;
 	private running = false;
 
 	constructor(readonly client: NlpLanguageClient) {
@@ -80,33 +88,58 @@ export class Studio {
 			keybindings: [monaco.KeyCode.F5],
 			run: () => void this.run(),
 		});
+
+		byId("download").addEventListener("click", () => this.download());
+		byId("revert-all").addEventListener("click", () => {
+			const n = this.changedPaths().length;
+			if (n && window.confirm(`Revert ${n} changed file${n === 1 ? "" : "s"} in ${this.current?.title}? Your edits will be lost.`)) {
+				this.revert();
+			}
+		});
+		// A draft waiting on its pause is saved before the page can go away.
+		window.addEventListener("pagehide", () => this.flushDrafts());
+		document.addEventListener("visibilitychange", () => {
+			if (document.visibilityState === "hidden") this.flushDrafts();
+		});
 	}
 
 	async openAnalyzer(name: string): Promise<void> {
 		const entry = this.analyzers.find((a) => a.name === name);
 		if (!entry) return;
 		const texts = await loadFiles(entry);
+		this.flushDrafts();
 		for (const model of this.models.values()) model.dispose();
 		this.models.clear();
+		this.originals.clear();
 		this.current = entry;
-		for (const [path, text] of texts) {
+		const draft = this.drafts.load(entry.name);
+		for (const [path, fetched] of texts) {
+			// One line ending everywhere -- in what a draft is compared with, what is saved,
+			// what runs and what downloads -- so a checkout with CRLF, or a file with both,
+			// does not look changed before anyone has touched it.
+			const original = fetched.replace(/\r\n?/g, "\n");
+			this.originals.set(path, original);
+			const text = draft?.files[path] ?? original;
 			const model = monaco.editor.createModel(text, languageFor(path), monaco.Uri.parse(fileUri(entry.name, path)));
-			// A run's markers describe the text that ran; editing makes them stale.
+			model.setEOL(monaco.editor.EndOfLineSequence.LF);
 			model.onDidChangeContent(() => {
+				// A run's markers describe the text that ran; editing makes them stale.
 				if (monaco.editor.getModelMarkers({ owner: RUN_MARKERS, resource: model.uri }).length) {
 					monaco.editor.setModelMarkers(model, RUN_MARKERS, []);
 				}
+				this.scheduleSave(path);
 			});
 			this.models.set(path, model);
 		}
-		await this.client.setFiles([...texts]
+		await this.client.setFiles([...this.models]
 			.filter(([path]) => INDEXED.test(path))
-			.map(([path, text]) => ({ uri: fileUri(entry.name, path), text })));
-		this.passList = passes(texts.get("spec/analyzer.seq") ?? "", entry.files);
+			.map(([path, model]) => ({ uri: fileUri(entry.name, path), text: model.getValue() })));
+		this.passList = passes(this.models.get("spec/analyzer.seq")?.getValue() ?? "", entry.files);
 		this.inputPath = entry.files.find((f) => f.startsWith("input/"));
 		this.panel.clear();
 		this.renderFiles();
 		this.showRunTarget();
+		this.showChanges();
 		const first = this.passList.find((p) => p.file && p.active)?.file;
 		this.openPath(first ?? "spec/analyzer.seq");
 	}
@@ -122,7 +155,7 @@ export class Studio {
 			this.showRunTarget();
 		}
 		byId("path").textContent = `${this.current.title} / ${path}`;
-		for (const el of byId("files").querySelectorAll<HTMLElement>("[data-path]")) {
+		for (const el of byId("files").querySelectorAll<HTMLElement>("button[data-path]")) {
 			el.classList.toggle("on", el.dataset.path === path);
 		}
 		if (selection) {
@@ -142,6 +175,93 @@ export class Studio {
 		if (!model) return;
 		this.openPath(path, monaco.Range.fromPositions(model.getPositionAt(from), model.getPositionAt(to)));
 	}
+
+	// ---- Drafts --------------------------------------------------------------------
+
+	// The files whose text differs from what was opened.
+	changedPaths(): string[] {
+		return [...this.models].filter(([path, model]) => model.getValue() !== this.originals.get(path)).map(([path]) => path);
+	}
+
+	// Save every draft still waiting on its pause.
+	flushDrafts(): void {
+		for (const path of [...this.pendingSaves.keys()]) this.saveDraft(path);
+	}
+
+	// Put files back as they were opened -- one, or all -- and forget their drafts.
+	revert(path?: string): void {
+		if (!this.current) return;
+		for (const p of path === undefined ? this.changedPaths() : [path]) {
+			const model = this.models.get(p);
+			const original = this.originals.get(p);
+			if (model && original !== undefined && model.getValue() !== original) model.setValue(original);
+		}
+		this.flushDrafts();
+		this.draftsKept = this.drafts.discard(this.current.name, path) || !this.drafts.available;
+		this.showChanges();
+	}
+
+	// Forget an analyzer's drafts without opening it (the self test starts clean this way).
+	forgetDrafts(analyzer: string): void {
+		if (this.current?.name === analyzer) this.flushDrafts();
+		this.drafts.discard(analyzer);
+	}
+
+	// The open analyzer, with any edits, as a zip of its folder.
+	analyzerZip(): Uint8Array {
+		const entry = this.current!;
+		return zipAnalyzer(entry.title, [...this.models].map(([path, model]) => [path, model.getValue()] as const));
+	}
+
+	download(): void {
+		if (!this.current) return;
+		const blob = new Blob([this.analyzerZip() as BlobPart], { type: "application/zip" });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement("a");
+		link.href = url;
+		link.download = `${safeFolder(this.current.title)}.zip`;
+		document.body.append(link);
+		link.click();
+		link.remove();
+		setTimeout(() => URL.revokeObjectURL(url), 10_000);
+	}
+
+	private scheduleSave(path: string): void {
+		clearTimeout(this.pendingSaves.get(path));
+		this.pendingSaves.set(path, setTimeout(() => this.saveDraft(path), SAVE_AFTER_MS));
+		this.showChanges();
+	}
+
+	private saveDraft(path: string): void {
+		clearTimeout(this.pendingSaves.get(path));
+		this.pendingSaves.delete(path);
+		const model = this.models.get(path);
+		const original = this.originals.get(path);
+		if (!this.current || !model || original === undefined) return;
+		this.draftsKept = this.drafts.save(this.current.name, path, model.getValue(), original);
+		this.showChanges();
+	}
+
+	private showChanges(): void {
+		const changed = new Set(this.changedPaths());
+		for (const button of byId("files").querySelectorAll<HTMLElement>("button[data-path]")) {
+			button.closest("li")?.classList.toggle("changed", changed.has(button.dataset.path!));
+		}
+		const note = byId("changes");
+		byId("revert-all").hidden = changed.size === 0;
+		if (!this.drafts.available) {
+			note.textContent = changed.size ? `${changed.size} changed · NOT kept: this browser blocks storage` : "";
+			note.className = "bad";
+		} else if (!this.draftsKept) {
+			note.textContent = `${changed.size} changed · could not save: browser storage is full`;
+			note.className = "bad";
+		} else {
+			note.textContent = changed.size ? `${changed.size} changed · kept in this browser` : "";
+			note.className = "muted";
+		}
+	}
+
+	// ---- Running -------------------------------------------------------------------
 
 	// Run the analyzer, as it stands in the editor, over the current input file.
 	async run(): Promise<RunResult> {
@@ -206,6 +326,8 @@ export class Studio {
 		byId<HTMLButtonElement>("run").disabled = this.running || !name;
 	}
 
+	// ---- The file list ---------------------------------------------------------------
+
 	private renderFiles(): void {
 		const entry = this.current!;
 		const nav = byId("files");
@@ -221,13 +343,25 @@ export class Studio {
 		const item = (list: HTMLElement, label: string, path: string | null, note = "", off = false) => {
 			const li = document.createElement("li");
 			if (off) li.classList.add("off");
+			const row = document.createElement("div");
+			row.className = "file-row";
 			const b = document.createElement(path ? "button" : "span");
 			b.textContent = label;
+			row.append(b);
 			if (path) {
 				b.dataset.path = path;
 				b.addEventListener("click", () => this.openPath(path));
+				const revert = document.createElement("button");
+				revert.className = "revert";
+				revert.type = "button";
+				revert.textContent = "↺";
+				revert.title = `Revert ${path} to how it was opened`;
+				revert.addEventListener("click", () => {
+					if (window.confirm(`Revert ${path}? Your edits to it will be lost.`)) this.revert(path);
+				});
+				row.append(revert);
 			}
-			li.append(b);
+			li.append(row);
 			if (note) {
 				const s = document.createElement("small");
 				s.textContent = note;
@@ -299,9 +433,11 @@ async function main(): Promise<void> {
 		serverHealth(),
 		studio.analyzers.length ? studio.openAnalyzer(studio.analyzers[0].name) : undefined,
 	]);
+	// Whether edits are kept is shown beside the changed-file count; here only when it cannot be.
+	const kept = studio.drafts.available ? "" : "This browser blocks storage, so edits are not kept. ";
 	status.textContent = health
-		? `Edits stay in this tab and are not saved. Run (F5) uses NLPPlus ${health.engine ?? "of an unknown version"}.`
-		: "Edits stay in this tab and are not saved. Running needs the run server: see the README.";
+		? `${kept}Run (F5) uses NLPPlus ${health.engine ?? "of an unknown version"}.`
+		: `${kept}Running needs the run server: see the README.`;
 
 	const params = new URLSearchParams(location.search);
 	if (params.has("selftest")) {
