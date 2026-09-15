@@ -24,7 +24,7 @@ import { DraftStore } from "./drafts";
 import { safeFolder, zipAnalyzer } from "./zipfiles";
 import { type RunResult, runAnalyzer, serverHealth } from "./run/api";
 import { RunPanel } from "./run/panel";
-import { selfTest } from "./selftest";
+import { progress, selfTest } from "./selftest";
 
 (self as unknown as { MonacoEnvironment: monaco.Environment }).MonacoEnvironment = {
 	getWorker: () => new EditorWorker(),
@@ -598,13 +598,22 @@ export class Studio {
 	}
 }
 
+// Under the self test, each stage of starting up is reported, so a hang says where.
+const selfTesting = new URLSearchParams(location.search).has("selftest");
+const step = (text: string) => {
+	if (selfTesting) progress(text);
+};
+
 async function main(): Promise<void> {
+	step("page script started");
 	const client = new NlpLanguageClient("language-server/browserServer.js");
 	await Promise.all([installHighlighting(), client.start()]);
 	installLanguageFeatures(client);
+	step("colouring and language server ready");
 
 	const studio = new Studio(client);
 	const [analyzers, who] = await Promise.all([loadIndex(), account()]);
+	step(`analyzer list and account loaded (${analyzers.length} analyzers, github=${who.github})`);
 	studio.analyzers = analyzers;
 	studio.account = who;
 	studio.renderAccount();
@@ -629,6 +638,7 @@ async function main(): Promise<void> {
 		serverHealth(),
 		studio.analyzers.length ? studio.openAnalyzer(studio.analyzers[0].name) : undefined,
 	]);
+	step(`first analyzer open, run server ${health ? "answering" : "not answering"}`);
 	// Whether edits are kept is shown beside the changed-file count; here only when it cannot be.
 	const kept = studio.drafts.available ? "" : "This browser blocks storage, so edits are not kept. ";
 	studio.say(health
@@ -644,5 +654,6 @@ async function main(): Promise<void> {
 
 main().catch((err: unknown) => {
 	byId("status").textContent = `Could not start: ${messageOf(err)}`;
+	step(`could not start: ${messageOf(err)}`);
 	console.error(err);
 });

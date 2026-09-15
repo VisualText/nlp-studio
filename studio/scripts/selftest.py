@@ -42,6 +42,18 @@ CANDIDATES = [
 ]
 
 
+def print_tail(title: str, path: str, keep=lambda line: True, n: int = 30) -> None:
+    """The last lines of a log worth reading, for when the page never answered."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            lines = [line.rstrip() for line in fh if keep(line)]
+    except OSError:
+        return
+    print(f"\n{title} (last {min(n, len(lines))} of {len(lines)} lines):")
+    for line in lines[-n:]:
+        print(f"  {line[:300]}")
+
+
 def stand_in_github():
     """A fake GitHub holding the studio's sample twice -- in a folder, and deeper -- for the GitHub checks."""
     sys.path.insert(0, str(STUDIO / "server"))
@@ -69,8 +81,12 @@ def start_run_server(python: str, github=None):
         # The development token path: GitHub calls with no sign-in (the sign-in redirects
         # themselves are covered by server/test_github.py).
         env.update(NLP_STUDIO_GITHUB_TOKEN=github.token, NLP_STUDIO_GITHUB_API=github.url, NLP_STUDIO_GITHUB_WEB=github.url)
+    # Its output is kept, and shown if the page never answers.
+    log_path = os.path.join(tempfile.gettempdir(), f"nlp-studio-selftest-server-{port}.log")
+    log = open(log_path, "wb")
     proc = subprocess.Popen([python, str(STUDIO / "server" / "app.py"), "--port", str(port), "--quiet"],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
+                            stdout=log, stderr=subprocess.STDOUT, env=env)
+    proc.log_path = log_path
     url = f"http://127.0.0.1:{port}"
     deadline = time.time() + 60
     while time.time() < deadline and proc.poll() is None:
@@ -108,6 +124,7 @@ def main() -> int:
         print(f"selftest: run checks skipped ({run_url})")
 
     result: dict = {}
+    started = [time.time()]
 
     class Handler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *a, **k):
@@ -143,7 +160,12 @@ def main() -> int:
             if run_proc and self.path.startswith("/api/"):
                 return self._proxy()
             body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
-            result["data"] = json.loads(body or b"{}")
+            if self.path.startswith("/selftest-progress"):
+                # How far the page has got; shown if it never sends its result.
+                step = body.decode("utf-8", "replace")
+                result.setdefault("steps", []).append(f"{time.time() - started[0]:6.1f}s  {step}")
+            else:
+                result["data"] = json.loads(body or b"{}")
             self.send_response(204)
             self.end_headers()
 
@@ -153,11 +175,13 @@ def main() -> int:
     profile = tempfile.mkdtemp(prefix="nlp-studio-selftest-")
     # GitHub's Ubuntu runners restrict the user namespaces Chrome's sandbox needs.
     sandbox = ["--no-sandbox"] if os.environ.get("CI") else []
+    # The browser's log carries the page's console messages and errors.
+    browser_log = tempfile.NamedTemporaryFile(prefix="nlp-studio-selftest-browser-", suffix=".log", delete=False)
     proc = subprocess.Popen(
         [browser, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", *sandbox,
-         f"--user-data-dir={profile}", "--window-size=1280,900", url],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    start = time.time()
+         "--enable-logging=stderr", "--v=0", f"--user-data-dir={profile}", "--window-size=1280,900", url],
+        stdout=subprocess.DEVNULL, stderr=browser_log)
+    start = started[0] = time.time()
     try:
         while "data" not in result and time.time() - start < 120:
             time.sleep(0.25)
@@ -179,6 +203,15 @@ def main() -> int:
     data = result.get("data")
     if not data:
         print(f"selftest: no result from the page after {time.time() - start:.0f}s")
+        steps = result.get("steps", [])
+        print(f"\nhow far the page got ({len(steps)} steps):" if steps else "\nthe page reported no progress at all")
+        for line in steps[-25:]:
+            print(f"  {line}")
+        browser_log.close()
+        print_tail("browser console and errors", browser_log.name,
+                   lambda line: "CONSOLE" in line or "ERROR" in line or "Uncaught" in line)
+        if run_proc:
+            print_tail("run server", run_proc.log_path)
         return 1
     for c in data["checks"]:
         print(f"{'ok ' if c['ok'] else 'BAD'} | {c['name']:<70} | {json.dumps(c['got'])[:120]}")

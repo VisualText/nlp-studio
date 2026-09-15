@@ -35,9 +35,17 @@ function positionOf(model: monaco.editor.ITextModel, text: string, offset = 1): 
 	return new monaco.Position(match.range.startLineNumber, match.range.startColumn + offset);
 }
 
+// Tell selftest.py how far the page has got, as it goes, so a hang says where it is.
+export function progress(step: string): void {
+	void fetch("selftest-progress", { method: "POST", body: step, keepalive: true }).catch(() => undefined);
+}
+
 export async function selfTest(studio: Studio, options: { run: boolean }): Promise<{ ok: boolean; checks: Check[] }> {
 	const checks: Check[] = [];
-	const check = (name: string, ok: boolean, got: unknown) => checks.push({ name, ok, got });
+	const check = (name: string, ok: boolean, got: unknown) => {
+		checks.push({ name, ok, got });
+		progress(`${ok ? "ok " : "BAD"} ${name}`);
+	};
 
 	try {
 		check("the studio's own sample is listed", studio.analyzers.some((a) => a.name === "hello-studio"),
@@ -144,10 +152,12 @@ async function githubChecks(studio: Studio, check: (name: string, ok: boolean, g
 	if (!studio.account?.github) return; // this server has no GitHub: nothing to check
 	check("the page knows who GitHub says you are", studio.account.signedIn && !!studio.account.login, studio.account);
 
+	progress("opening the GitHub dialog");
 	await studio.showGitHubDialog();
 	const repos = [...document.querySelectorAll<HTMLOptionElement>("#github-repo option")].map((o) => o.value);
 	check("Open from GitHub lists the repositories you can reach", repos.includes("acme/analyzers"), repos);
 
+	progress("listing the analyzers in acme/analyzers");
 	await studio.listGitHubAnalyzers("acme/analyzers", "main");
 	const buttons = [...document.querySelectorAll<HTMLButtonElement>("#github-analyzers button")];
 	const folders = buttons.map((b) => b.dataset.folder);
@@ -164,6 +174,7 @@ async function githubChecks(studio: Studio, check: (name: string, ok: boolean, g
 		recent());
 
 	if (withRun) {
+		progress("running the analyzer opened from GitHub");
 		const result = await studio.run();
 		let greetings: unknown;
 		try {
