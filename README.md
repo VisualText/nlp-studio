@@ -11,7 +11,7 @@ see the parse tree — with no install, no C++ toolchain, and no VS Code.
 | Phase | What | State |
 |---|---|---|
 | **1. Stopgap** | `openvscode-server` container with the real `dehilster.nlp` extension baked in | **in this repo** — see [stopgap/](stopgap/) |
-| **2. Studio** | Purpose-built web app: Monaco front end + Node API server hosting the engine in-process | **started** — the editor, in [studio/](studio/); running analyzers is next |
+| **2. Studio** | Purpose-built web app: Monaco front end + an API server running the engine | **started** — in [studio/](studio/): the editor, and running analyzers through a local run server |
 | **3. Client-side** | Emscripten/WASM build of the engine for zero-server demos | speculative |
 
 Phase 1 exists to have something live quickly — a "Try NLP++" button for
@@ -21,9 +21,9 @@ browser tab, at the cost of one container per user. It is deliberately **not** t
 Phase 2 is the product. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and
 the reasoning behind it.
 
-## Quick start (phase 2 editor)
+## Quick start (phase 2)
 
-Requires Node 20+. A checkout of
+Requires Node 20+, and Python 3.11+ to run analyzers. A checkout of
 [`analyzer-templates`](https://github.com/VisualText/analyzer-templates) next to this repo
 (`../analyzer-templates`) adds five templates to the analyzer list; without it the studio
 opens its own sample only.
@@ -31,15 +31,33 @@ opens its own sample only.
 ```bash
 cd studio
 npm install
-npm run dev                  # http://localhost:5173
-npm test                     # unit tests
+pip install -r server/requirements.txt   # NLPPlus, the engine -- a venv is a good idea
+npm run server               # the run server, on http://127.0.0.1:8765
+npm run dev                  # in a second terminal: http://localhost:5173
+```
+
+Edit an analyzer and press **Run** (F5) to run it on the input file. Its output, parse tree,
+problems and log appear under the editor: click a node in the tree to select its text, or its
+rule link to open the rule that built it. Without the run server the studio still edits —
+colouring, hover, go to definition, completion, rename and problems all run in the browser,
+the language features in the NLP++ language server from `vscode-nlp` in a Web Worker. Edits
+stay in the tab; nothing is saved.
+
+```bash
+npm test                            # page unit tests
+npm run test:server                 # run-server tests (the engine tests need NLPPlus)
 npm run build && npm run selftest   # the built page, checked in headless Edge or Chrome
 ```
 
-It is a static site: `npm run build` writes `studio/dist/`, which any web server can host.
-Everything — colouring, hover, go to definition, completion, rename, problems — runs in the
-browser, the language features in the NLP++ language server from `vscode-nlp` running in a
-Web Worker. Edits stay in the tab; nothing is saved or run yet.
+`npm run selftest` starts a run server as well, with the Python that runs it or
+`NLP_PYTHON`, and skips the run checks — saying so — when that Python has no NLPPlus.
+`npm run build` writes `studio/dist/`, a static site; `python server/app.py --dist dist`
+serves the site and the API from one address.
+
+**The run server has no authentication and is not a sandbox** — NLP++ can read and write
+files. It listens on 127.0.0.1. Read
+[Running analyzers](docs/ARCHITECTURE.md#running-analyzers-implemented) before letting
+anyone else reach it.
 
 ## Quick start (phase 1)
 

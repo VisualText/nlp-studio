@@ -13,6 +13,9 @@ stopgap/vsix/
 # analyzer-templates checkout, which has no license to commit it under.
 studio/public/analyzers/
 
+__pycache__/
+.venv/
+
 .DS_Store
 Thumbs.db
 

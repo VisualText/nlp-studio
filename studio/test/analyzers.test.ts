@@ -25,14 +25,16 @@ describe("analyzer.seq", () => {
 		"nlp\tmissing\t# no file for this one",
 	].join("\r\n");
 
-	it("lists passes in run order, numbering only those that run", () => {
+	// The engine's numbering, which run problems and tree nodes use: measured on
+	// NLPPlus 2.2.37, a switched-off pass keeps its number and a folder takes none.
+	it("lists passes in run order, numbered as the engine numbers them", () => {
 		expect(passes(seq, files).map((p) => [p.n, p.kind, p.name, p.active])).toEqual([
 			[1, "tokenize", "nil", true],
 			[2, "nlp", "funcs", true],
-			[null, "nlp", "off", false],
+			[3, "nlp", "off", false],
 			[null, "folder", "group", true],
-			[3, "pat", "old", true],
-			[4, "nlp", "missing", true],
+			[4, "pat", "old", true],
+			[5, "nlp", "missing", true],
 		]);
 	});
 	it("names each pass's rule file when the analyzer has it", () => {

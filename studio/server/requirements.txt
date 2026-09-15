@@ -1,0 +1,5 @@
+# The run server is standard-library Python; the engine is its one dependency.
+#
+# 2.2.37, pinned: readfile() and callconcept() arrived after 2.2.8 and 2.2.23,
+# and the analyzers and templates the studio opens use them.
+NLPPlus==2.2.37
