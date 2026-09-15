@@ -13,7 +13,8 @@ half a second, most of it NLPPlus copying its bundled analyzers on import.
 WHAT COMES BACK is read from the files the engine leaves, not from NLPPlus's
 Results, which reads them in the platform's encoding where the engine writes UTF-8:
 
-    output/final.tree    the parse tree              -> "tree"
+    output/final.tree    the parse tree              -> "tree", and kept by trees.py
+    output/ana###.tree   the tree after each pass    -> kept by trees.py (debug runs only)
     logs/make_ana.log    errors building the rules   -> "problems"
     output/err.log       errors running them         -> "problems"
     output/*             what the analyzer wrote     -> "output"
@@ -78,6 +79,8 @@ BLOCKED = frozenset({
 
 # Files the engine writes into output/ for itself; everything else there is the analyzer's.
 ENGINE_OUTPUT = frozenset({"dbg.log", "err.log", "final.tree", "def.log", "init.log"})
+# The tree the engine writes after each pass in debug mode: kept by trees.py, not output.
+_PASS_TREE = re.compile(r"^ana(\d+)\.tree$")
 
 _SEGMENT = r"[A-Za-z0-9 _.,()&+@'\-]+"
 _PATH = re.compile(rf"^(spec|kb|input)(/{_SEGMENT})+$")
@@ -135,7 +138,13 @@ def pass_files(seq: str, paths) -> dict[int, str | None]:
     after it is reported one higher. Same numbering as the page's passes().
     """
     have = set(paths)
-    out: dict[int, str | None] = {}
+    return {n: next((f for f in (f"spec/{name}.nlp", f"spec/{name}.pat") if f in have), None)
+            for n, name in pass_names(seq).items()}
+
+
+def pass_names(seq: str) -> dict[int, str]:
+    """Pass number -> the pass's name in analyzer.seq, numbered as pass_files() describes."""
+    names: dict[int, str] = {}
     n = 0
     for raw in seq.splitlines():
         line = raw.strip()
@@ -145,9 +154,8 @@ def pass_files(seq: str, paths) -> dict[int, str | None]:
         if not parts or parts[0] in ("end", "folder", "stub"):
             continue
         n += 1
-        name = parts[1] if len(parts) > 1 else ""
-        out[n] = next((f for f in (f"spec/{name}.nlp", f"spec/{name}.pat") if f in have), None)
-    return out
+        names[n] = parts[1] if len(parts) > 1 else parts[0]
+    return names
 
 
 def parse_log(text: str | None, pass_file: dict[int, str | None]) -> list[dict]:
@@ -231,8 +239,14 @@ def engine_log(stdout: str) -> list[str]:
 
 
 def run(files: dict[str, str], text: str, *, python: str = sys.executable, timeout: float = DEFAULT_TIMEOUT,
-        memory_mb: int = DEFAULT_MEMORY_MB, tmp_root: str | None = None) -> dict:
-    """Run the analyzer in `files` over `text`. Raises RunError for a bad request."""
+        memory_mb: int = DEFAULT_MEMORY_MB, tmp_root: str | None = None, develop: bool = False,
+        tree_store=None, owner: str | None = None) -> dict:
+    """Run the analyzer in `files` over `text`. Raises RunError for a bad request.
+
+    `develop` runs the engine in debug mode, which writes a tree after every pass. With a
+    `tree_store` (trees.py) the run's trees are kept there for `owner` and listed in the
+    result's "trees"; without one they are not kept.
+    """
     started = time.monotonic()
     validate(files, text)
     pass_file = pass_files(files["spec/analyzer.seq"], files)
@@ -257,7 +271,7 @@ def run(files: dict[str, str], text: str, *, python: str = sys.executable, timeo
 
         try:
             proc = subprocess.Popen(
-                [python, str(CHILD), str(run_dir / "analyzers"), ANALYZER],
+                [python, str(CHILD), str(run_dir / "analyzers"), ANALYZER, *(["develop"] if develop else [])],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 cwd=run_dir, env=_child_env(tmp, timeout, memory_mb), start_new_session=os.name == "posix")
         except OSError as err:
@@ -296,15 +310,25 @@ def run(files: dict[str, str], text: str, *, python: str = sys.executable, timeo
                     })
 
         message = "Ran." if not problems else f"Ran, and reported {len(problems)} problem{'s' if len(problems) != 1 else ''}."
-        return _result("ok", message, started, problems=problems, log=log,
-                       output=output, tree=_read(ana / "output" / "final.tree", MAX_TREE_BYTES) or None)
+        tree = _read(ana / "output" / "final.tree", MAX_TREE_BYTES) or None
+        trees = None
+        if tree_store is not None:
+            trees = tree_store.keep(ana / "output", owner)
+            if trees:
+                names = pass_names(files["spec/analyzer.seq"])
+                for entry in trees["files"]:
+                    number = _PASS_TREE.match(entry["name"])
+                    entry["pass"] = int(number[1]) if number else None
+                    entry["passName"] = names.get(entry["pass"]) if number else None
+                    entry["file"] = pass_file.get(entry["pass"]) if number else None
+        return _result("ok", message, started, problems=problems, log=log, output=output, tree=tree, trees=trees)
     finally:
         shutil.rmtree(run_dir, ignore_errors=True)
 
 
 def _result(status: str, message: str, started: float, **extra) -> dict:
     result = {"status": status, "message": message, "ms": round((time.monotonic() - started) * 1000),
-              "problems": [], "log": [], "output": {}, "tree": None}
+              "problems": [], "log": [], "output": {}, "tree": None, "trees": None}
     result.update(extra)
     return result
 
@@ -357,7 +381,7 @@ def _outputs(out_dir: Path) -> dict[str, str]:
         return output
     for path in sorted(out_dir.rglob("*")):
         rel = path.relative_to(out_dir).as_posix()
-        if not path.is_file() or rel in ENGINE_OUTPUT:
+        if not path.is_file() or rel in ENGINE_OUTPUT or _PASS_TREE.match(rel):
             continue
         if len(output) >= MAX_OUTPUT_FILES:
             break

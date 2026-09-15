@@ -14,6 +14,7 @@ import { LANGUAGE_IDS } from "./highlight";
 import { DraftStore } from "./drafts";
 import { recent } from "./github/api";
 import { type Studio, RUN_MARKERS } from "./main";
+import { treeHover } from "./run/treeview";
 
 interface Check { name: string; ok: boolean; got: unknown }
 
@@ -245,22 +246,59 @@ async function runChecks(studio: Studio, check: (name: string, ok: boolean, got:
 	check("the run server runs the sample to its output", result.status === "ok" && greetings === 3,
 		{ status: result.status, message: result.message, greetings });
 
-	studio.panel.showTab("tree");
-	const greetingNodes = [...document.querySelectorAll<HTMLButtonElement>("#results .results-body button.node")]
-		.filter((b) => b.dataset.name === "_greeting");
-	check("the parse tree shows the three greetings", greetingNodes.length === 3, greetingNodes.length);
+	const listed = () => [...document.querySelectorAll<HTMLElement>("#files button[data-tree]")].map((b) => b.dataset.tree!);
+	check("without Debug, the file list offers only the final parse tree", JSON.stringify(listed()) === '["final.tree"]', listed());
 
-	greetingNodes[0]?.click();
-	const input = studio.editor.getModel();
+	progress("opening the final parse tree");
+	document.querySelector<HTMLButtonElement>('#files button[data-tree="final.tree"]')?.click();
+	const tree = await until(() => studio.editor.getModel(), (m) => m?.getLanguageId() === "tree");
+	const greetingLines = tree ? tree.findMatches("_greeting [", false, false, true, null, false) : [];
+	check("the final parse tree opens in the editor, read-only, with the three greetings",
+		studio.currentTree === "final.tree" && studio.currentPath === undefined && greetingLines.length === 3
+		&& studio.editor.getOption(monaco.editor.EditorOption.readOnly),
+		{ tree: studio.currentTree, language: tree?.getLanguageId(), greetings: greetingLines.length });
+
+	if (tree && greetingLines.length) {
+		const hover = treeHover(tree, greetingLines[0].range.getStartPosition());
+		const hoverText = hover?.contents.map((c) => c.value).join("\n") ?? "";
+		check("hover on a tree node shows the text it covers", hoverText.includes("hello world"), hoverText);
+
+		studio.editor.setPosition(greetingLines[0].range.getStartPosition());
+		studio.editor.trigger("selftest", "editor.action.revealDefinition", null);
+		await until(() => studio.currentPath, (p) => p === "spec/greeting.nlp");
+		const position = studio.editor.getPosition();
+		const ruleLine = position && studio.currentPath ? studio.editor.getModel()!.getLineContent(position.lineNumber) : "";
+		check("go to definition on a node opens the rule that built it",
+			studio.currentPath === "spec/greeting.nlp" && ruleLine.includes("_greeting"), { path: studio.currentPath, ruleLine });
+	}
+
+	await studio.openTree("final.tree");
+	const token = tree?.findMatches("world [", false, false, true, null, false)[0];
+	if (token) {
+		studio.editor.setPosition(token.range.getStartPosition());
+		studio.editor.trigger("selftest", "editor.action.revealDefinition", null);
+		await until(() => studio.currentPath, (p) => p === "input/hello.txt");
+	}
+	const input = studio.currentPath === "input/hello.txt" ? studio.editor.getModel() : null;
 	const selected = input ? input.getValueInRange(studio.editor.getSelection()!) : "";
-	check("clicking a tree node selects its text in the input",
-		studio.currentPath === "input/hello.txt" && selected === "hello world", { path: studio.currentPath, selected });
+	check("go to definition on a token selects its text in the input", selected === "world",
+		{ path: studio.currentPath, selected });
 
-	greetingNodes[0]?.parentElement?.querySelector<HTMLButtonElement>("button.rule")?.click();
-	const position = studio.editor.getPosition();
-	const ruleLine = position ? studio.editor.getModel()!.getLineContent(position.lineNumber) : "";
-	check("a node's rule link opens the rule that built it",
-		studio.currentPath === "spec/greeting.nlp" && ruleLine.includes("_greeting"), { path: studio.currentPath, ruleLine });
+	progress("running with Debug");
+	const debug = document.getElementById("debug") as HTMLInputElement;
+	debug.checked = true;
+	const debugged = await studio.run();
+	debug.checked = false;
+	const names = listed();
+	check("with Debug, the file list offers the tree after every pass as well",
+		debugged.status === "ok" && names.includes("final.tree") && names.includes("ana002.tree") && names.includes("ana003.tree"), names);
+	const treeText = async (name: string) => (await studio.openTree(name)) ? studio.editor.getModel()!.getValue() : null;
+	// Pass 1 tokenizes; pass 3 (greeting) builds the greetings.
+	const afterOne = await treeText("ana001.tree");
+	const afterThree = await treeText("ana003.tree");
+	check("...and the greetings appear in the tree after the pass that builds them, not before",
+		!!afterOne?.includes("world [") && !afterOne.includes("_greeting") && !!afterThree?.includes("_greeting"),
+		{ afterOne: afterOne?.slice(0, 200), afterThree: afterThree?.length, path: document.getElementById("path")?.textContent });
 
 	studio.openPath("spec/output.nlp");
 	const output = studio.editor.getModel()!;

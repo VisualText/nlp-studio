@@ -8,7 +8,8 @@
 //                  GitHub repository the person signed in can reach
 //   drafts.ts      edits kept in this browser, until downloaded (zipfiles.ts)
 //   run/           running one: its files go to the run server (server/app.py), and
-//                  the output, parse tree and problems come back
+//                  the output and problems come back; its parse trees open in the
+//                  editor (run/treeview.ts), read from the server one at a time
 import "./styles.css";
 import EditorWorker from "monaco-editor/editor/editor.worker.js?worker";
 import { monaco } from "./monaco";
@@ -24,8 +25,9 @@ import {
 } from "./github/api";
 import { DraftStore } from "./drafts";
 import { safeFolder, zipAnalyzer } from "./zipfiles";
-import { type RunResult, runAnalyzer, serverHealth } from "./run/api";
+import { type RunResult, type RunTrees, type TreeFile, fetchTree, runAnalyzer, serverHealth } from "./run/api";
 import { RunPanel } from "./run/panel";
+import { type TreeContext, attachTreeContext, installTreeFeatures, treeDefinition } from "./run/treeview";
 import { progress, selfTest } from "./selftest";
 
 (self as unknown as { MonacoEnvironment: monaco.Environment }).MonacoEnvironment = {
@@ -40,6 +42,34 @@ const INDEXED = /\.(nlp|pat|kbb)$/i;
 export const RUN_MARKERS = "nlp++ run";
 // How long typing may pause before the draft is saved.
 const SAVE_AFTER_MS = 500;
+// Whether Debug was ticked last time, in this browser.
+const DEBUG_KEY = "nlp-studio.debug";
+
+function remembered(key: string): string | null {
+	try {
+		return localStorage.getItem(key);
+	} catch {
+		return null;
+	}
+}
+
+function rememberSetting(key: string, value: string): void {
+	try {
+		localStorage.setItem(key, value);
+	} catch {
+		// Storage blocked: it is only a convenience.
+	}
+}
+
+function sizeOf(bytes: number): string {
+	if (bytes < 1024) return `${bytes} B`;
+	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+	return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function treeTitle(file: TreeFile): string {
+	return file.pass === null ? "final parse tree" : `parse tree after pass ${file.pass}${file.passName ? ` (${file.passName})` : ""}`;
+}
 
 function darkTheme(): boolean {
 	const set = document.documentElement.dataset.theme;
@@ -60,6 +90,8 @@ export class Studio {
 	analyzers: AnalyzerEntry[] = [];
 	current: AnalyzerEntry | undefined;
 	currentPath: string | undefined;
+	// The parse tree in the editor, when one is: currentPath is then undefined.
+	currentTree: string | undefined;
 	// The input a run reads: the input file opened last, or the analyzer's first.
 	inputPath: string | undefined;
 	passList: Pass[] = [];
@@ -74,6 +106,12 @@ export class Studio {
 	private repos: Repository[] = [];
 	private draftsKept = true;
 	private running = false;
+	// The last run's trees, and what its tree documents need to point back into the analyzer.
+	// Kept apart from the analyzer's files: never a draft, never run, committed or zipped.
+	private lastRun: { trees: RunTrees; context: TreeContext } | undefined;
+	private readonly treeModels = new Map<string, monaco.editor.ITextModel>();
+	private lastPath: string | undefined;
+	private treeRequest = 0;
 
 	constructor(readonly client: NlpLanguageClient) {
 		this.editor = monaco.editor.create(byId("editor"), {
@@ -87,10 +125,15 @@ export class Studio {
 		});
 		// Go to definition in another pass opens that pass in this editor.
 		monaco.editor.registerEditorOpener({
-			openCodeEditor: (_source, resource, selection) => {
+			openCodeEditor: (source, resource, selection) => {
 				const path = this.current && pathOf(resource.toString(), this.current.name);
 				if (!path || !this.models.has(path)) return false;
-				this.openPath(path, selection);
+				// Go to definition lands on the start of what it found. From a tree node to the
+				// input, what it found is the node's text: select all of it.
+				const from = source.getModel();
+				const at = source.getPosition();
+				const found = from?.getLanguageId() === "tree" && at ? treeDefinition(from, at) : null;
+				this.openPath(path, found && path.startsWith("input/") ? found.range : selection);
 				return true;
 			},
 		});
@@ -98,9 +141,12 @@ export class Studio {
 
 		this.panel = new RunPanel(byId("results"), {
 			open: (path, at) => this.openPath(path, at),
-			selectInput: (path, from, to) => this.selectInput(path, from, to),
+			openTree: (name) => void this.openTree(name),
 		});
 		byId("run").addEventListener("click", () => void this.run());
+		const debug = byId<HTMLInputElement>("debug");
+		debug.checked = remembered(DEBUG_KEY) === "1";
+		debug.addEventListener("change", () => rememberSetting(DEBUG_KEY, debug.checked ? "1" : "0"));
 		this.editor.addAction({
 			id: "nlp.runAnalyzer",
 			label: "Run Analyzer",
@@ -143,6 +189,7 @@ export class Studio {
 		if (!entry) return;
 		const texts = await loadFiles(entry);
 		this.flushDrafts();
+		this.forgetTrees();
 		for (const model of this.models.values()) model.dispose();
 		this.models.clear();
 		this.originals.clear();
@@ -183,9 +230,12 @@ export class Studio {
 	openPath(path: string, selection?: monaco.IRange | monaco.IPosition): void {
 		const model = this.models.get(path);
 		if (!model || !this.current) return;
+		this.editor.updateOptions({ readOnly: false });
 		this.editor.setModel(model);
 		this.client.open(model, path);
 		this.currentPath = path;
+		this.lastPath = path;
+		this.currentTree = undefined;
 		if (path.startsWith("input/")) {
 			this.inputPath = path;
 			this.showRunTarget();
@@ -193,9 +243,7 @@ export class Studio {
 		const source = this.current.source;
 		const where = source ? `${source.repo} @ ${source.commit.slice(0, 7)} / ` : "";
 		byId("path").textContent = `${where}${this.current.title} / ${path}`;
-		for (const el of byId("files").querySelectorAll<HTMLElement>("button[data-path]")) {
-			el.classList.toggle("on", el.dataset.path === path);
-		}
+		this.markOpen();
 		if (selection) {
 			const range = monaco.Range.isIRange(selection)
 				? selection
@@ -207,11 +255,67 @@ export class Studio {
 		this.showProblems();
 	}
 
-	// Select [from, to) -- UTF-16 offsets into the text as it was run -- in an input file.
-	selectInput(path: string, from: number, to: number): void {
-		const model = this.models.get(path);
-		if (!model) return;
-		this.openPath(path, monaco.Range.fromPositions(model.getPositionAt(from), model.getPositionAt(to)));
+	// ---- Parse trees -----------------------------------------------------------------
+
+	// The last run's trees, as listed in the file list.
+	get runTrees(): RunTrees | undefined {
+		return this.lastRun?.trees;
+	}
+
+	// Open one of the last run's trees, read-only, in the editor. Fetched the first time it is
+	// opened, then kept until the next run. False, and said in the header, if it could not be.
+	async openTree(name: string): Promise<boolean> {
+		const run = this.lastRun;
+		const file = run?.trees.files.find((f) => f.name === name);
+		if (!run || !file || !this.current) return false;
+		const request = ++this.treeRequest;
+		let model = this.treeModels.get(name);
+		if (!model) {
+			const before = byId("status").textContent ?? "";
+			this.say(`Loading the ${treeTitle(file)} (${sizeOf(file.size)})…`);
+			let text: string;
+			try {
+				text = await fetchTree(run.trees.run, name);
+			} catch (err) {
+				if (request === this.treeRequest) this.say(`Could not open the ${treeTitle(file)}: ${messageOf(err)}`);
+				return false;
+			}
+			if (this.lastRun !== run) return false; // another run or analyzer meanwhile
+			this.say(before);
+			model = this.treeModels.get(name);
+			if (!model) {
+				model = monaco.editor.createModel(text, "tree", monaco.Uri.parse(`nlp-tree:/${run.trees.run}/${name}`));
+				attachTreeContext(model, run.context);
+				this.treeModels.set(name, model);
+			}
+		}
+		if (request !== this.treeRequest) return false; // another was opened meanwhile
+		this.editor.setModel(model);
+		this.editor.updateOptions({ readOnly: true });
+		this.currentPath = undefined;
+		this.currentTree = name;
+		byId("path").textContent = `${this.current.title} / ${treeTitle(file)} · ${name}`;
+		this.markOpen();
+		this.editor.focus();
+		this.showProblems();
+		return true;
+	}
+
+	// Let go of the last run's trees; the editor goes back to a file if it was showing one.
+	private forgetTrees(): void {
+		this.treeRequest++;
+		const showing = this.currentTree !== undefined;
+		this.lastRun = undefined;
+		this.currentTree = undefined;
+		if (showing) this.editor.setModel(null);
+		for (const model of this.treeModels.values()) model.dispose();
+		this.treeModels.clear();
+	}
+
+	private markOpen(): void {
+		for (const el of byId("files").querySelectorAll<HTMLElement>("button[data-path], button[data-tree]")) {
+			el.classList.toggle("on", el.dataset.path ? el.dataset.path === this.currentPath : el.dataset.tree === this.currentTree);
+		}
 	}
 
 	// ---- GitHub ----------------------------------------------------------------------
@@ -574,21 +678,41 @@ export class Studio {
 			if (!path.startsWith("input/")) files[path] = model.getValue();
 		}
 		const text = input.getValue();
+		const passList = this.passList;
 		try {
-			const result = await runAnalyzer(files, text);
+			const result = await runAnalyzer(files, text, { develop: byId<HTMLInputElement>("debug").checked });
 			if (this.current === analyzer) {
 				this.markRunProblems(result);
-				this.panel.show(result, {
-					text,
+				this.showTrees(result, {
+					analyzer: analyzer.name,
 					inputPath,
-					passFile: (n) => this.passList.find((p) => p.n === n)?.file ?? null,
+					text,
+					passFile: (n) => passList.find((p) => p.n === n)?.file ?? null,
 				});
+				this.panel.show(result);
 			}
 			return result;
 		} finally {
 			this.running = false;
 			status.textContent = before;
 			this.showRunTarget();
+		}
+	}
+
+	// A run's trees replace the last run's. A tree open in the editor is opened again from this
+	// run, if it wrote one of that name; otherwise the editor goes back to the file it had.
+	private showTrees(result: RunResult, context: TreeContext): void {
+		const shown = this.currentTree;
+		this.forgetTrees();
+		if (result.trees?.files.length) this.lastRun = { trees: result.trees, context };
+		this.renderFiles();
+		this.showChanges();
+		if (shown === undefined) {
+			this.markOpen();
+		} else if (this.lastRun?.trees.files.some((f) => f.name === shown)) {
+			void this.openTree(shown);
+		} else {
+			this.openPath(this.lastPath ?? "spec/analyzer.seq");
 		}
 	}
 
@@ -678,6 +802,32 @@ export class Studio {
 			const list = section("Input");
 			for (const f of input) item(list, f.slice(6), f);
 		}
+		const trees = this.lastRun?.trees;
+		if (trees) {
+			const list = section("Parse trees");
+			// The final tree first, then the tree after each pass, in order.
+			const files = [...trees.files].sort((a, b) => (a.pass ?? -1) - (b.pass ?? -1));
+			for (const f of files) {
+				const li = document.createElement("li");
+				const row = document.createElement("div");
+				row.className = "file-row";
+				const open = button(f.pass === null ? "final" : `${f.pass}  ${f.passName ?? ""}`, () => void this.openTree(f.name));
+				open.dataset.tree = f.name;
+				open.title = `Open the ${treeTitle(f)}`;
+				row.append(open);
+				const note = document.createElement("small");
+				note.textContent = `${f.pass === null ? "after the last pass" : `after pass ${f.pass}`} · ${sizeOf(f.size)}`;
+				li.append(row, note);
+				list.append(li);
+			}
+			if (trees.skipped.length) {
+				const li = document.createElement("li");
+				const note = document.createElement("small");
+				note.textContent = `Too large to keep: ${trees.skipped.join(", ")}`;
+				li.append(note);
+				list.append(li);
+			}
+		}
 	}
 
 	private showProblems(): void {
@@ -707,6 +857,7 @@ async function main(): Promise<void> {
 	const client = new NlpLanguageClient("language-server/browserServer.js");
 	await Promise.all([installHighlighting(), client.start()]);
 	installLanguageFeatures(client);
+	installTreeFeatures();
 	step("colouring and language server ready");
 
 	const studio = new Studio(client);
