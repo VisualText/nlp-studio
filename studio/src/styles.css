@@ -6,6 +6,9 @@
 	--line: #dcdcd8;
 	--on: #e3ecfb;
 	--on-ink: #1f4fa3;
+	--accent: #1f6feb;
+	--accent-ink: #ffffff;
+	--ok: #1a7f37;
 	--error: #b3261e;
 	--warning: #8a5a00;
 	color-scheme: light;
@@ -13,13 +16,15 @@
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme="light"]) {
 		--bg: #17181a; --panel: #1e1f22; --ink: #e4e4e4; --muted: #9aa0a6; --line: #34363a;
-		--on: #243553; --on-ink: #a9c7ff; --error: #f28b82; --warning: #fdd663;
+		--on: #243553; --on-ink: #a9c7ff; --accent: #2f81f7; --accent-ink: #ffffff; --ok: #56d364;
+		--error: #f28b82; --warning: #fdd663;
 		color-scheme: dark;
 	}
 }
 :root[data-theme="dark"] {
 	--bg: #17181a; --panel: #1e1f22; --ink: #e4e4e4; --muted: #9aa0a6; --line: #34363a;
-	--on: #243553; --on-ink: #a9c7ff; --error: #f28b82; --warning: #fdd663;
+	--on: #243553; --on-ink: #a9c7ff; --accent: #2f81f7; --accent-ink: #ffffff; --ok: #56d364;
+	--error: #f28b82; --warning: #fdd663;
 	color-scheme: dark;
 }
 
@@ -39,6 +44,8 @@ body { background: var(--bg); color: var(--ink); font: 14px/1.4 system-ui, -appl
 select, button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line);
 	border-radius: 6px; padding: 4px 8px; }
 button { cursor: pointer; }
+button:disabled { cursor: default; opacity: .55; }
+button.run { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; padding: 4px 14px; }
 
 .layout { flex: 1; display: grid; grid-template-columns: minmax(200px, 280px) 1fr; min-height: 0; }
 @media (max-width: 720px) { .layout { grid-template-columns: 1fr; grid-template-rows: 30vh 1fr; } }
@@ -65,3 +72,38 @@ button { cursor: pointer; }
 .problems button.error { color: var(--error); }
 .problems button.warning { color: var(--warning); }
 .problems button:hover { background: var(--on); }
+
+/* Run results */
+.results { height: 38vh; min-height: 150px; display: flex; flex-direction: column; border-top: 1px solid var(--line);
+	background: var(--panel); }
+.results-bar { display: flex; align-items: center; gap: 2px; padding: 4px 8px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.results-bar [data-tab] { border: 0; background: none; padding: 3px 10px; border-radius: 5px; font-size: 13px; }
+.results-bar [data-tab]:hover { background: var(--on); }
+.results-bar [data-tab][aria-selected="true"] { background: var(--on); color: var(--on-ink); font-weight: 600; }
+.results-summary { margin-left: 10px; font-size: 12.5px; color: var(--error); }
+.results-summary[data-status="ok"] { color: var(--ok); }
+.results-close { border: 0; background: none; font-size: 18px; line-height: 1; padding: 2px 8px; }
+.results-body { flex: 1; overflow: auto; padding: 8px 12px; font-size: 13px; }
+.note { margin: 2px 0 8px; color: var(--muted); }
+.note.bad { color: var(--error); }
+.file-name { margin: 6px 0 4px; font-size: 12px; color: var(--muted); }
+.file-text { margin: 0 0 12px; padding: 8px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+	white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px; }
+.log { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+
+.tree { font-size: 12.5px; }
+.tree details > :not(summary) { margin-left: 18px; }
+.tree summary { cursor: pointer; }
+.tree summary > .tree-row { display: inline-flex; }
+.tree-row { display: flex; align-items: baseline; gap: 8px; min-height: 22px; min-width: 0; }
+.tree button.node, .tree button.rule { border: 0; background: none; padding: 1px 4px; border-radius: 4px; }
+.tree button.node { font: inherit; color: var(--ink); }
+.tree button.node.built { color: var(--on-ink); font-weight: 600; }
+.tree button.node:hover, .tree button.rule:hover:not(:disabled) { background: var(--on); }
+.tree button.rule { font-size: 11.5px; color: var(--muted); text-decoration: underline dotted; }
+.tree .snippet { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 42ch; }
+
+.run-problems { display: flex; flex-direction: column; }
+.run-problem { display: flex; gap: 14px; text-align: left; border: 0; border-radius: 4px; background: none; padding: 4px 6px; }
+.run-problem:hover:not(:disabled) { background: var(--on); }
+.run-problem .where { color: var(--error); white-space: nowrap; }

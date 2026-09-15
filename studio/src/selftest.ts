@@ -2,11 +2,15 @@
 //
 // scripts/selftest.py serves a build, opens it headless and waits for this to
 // POST its results. Every check goes through the editor the way a person would
-// -- a Monaco action, a provider, a marker -- so a pass means the grammar, the
-// worker, the client and the editor all agree, not just that a request answered.
+// -- a Monaco action, a provider, a marker, a click in the results -- so a pass
+// means the grammar, the worker, the client, the run server and the editor all
+// agree, not just that a request answered.
+//
+// `?selftest=run` adds the run checks; selftest.py asks for them when it has
+// started a run server for the page.
 import { monaco } from "./monaco";
 import { LANGUAGE_IDS } from "./highlight";
-import type { Studio } from "./main";
+import { type Studio, RUN_MARKERS } from "./main";
 
 interface Check { name: string; ok: boolean; got: unknown }
 
@@ -28,7 +32,7 @@ function positionOf(model: monaco.editor.ITextModel, text: string, offset = 1): 
 	return new monaco.Position(match.range.startLineNumber, match.range.startColumn + offset);
 }
 
-export async function selfTest(studio: Studio): Promise<{ ok: boolean; checks: Check[] }> {
+export async function selfTest(studio: Studio, options: { run: boolean }): Promise<{ ok: boolean; checks: Check[] }> {
 	const checks: Check[] = [];
 	const check = (name: string, ok: boolean, got: unknown) => checks.push({ name, ok, got });
 
@@ -88,8 +92,51 @@ export async function selfTest(studio: Studio): Promise<{ ok: boolean; checks: C
 			const kb = await until(() => studio.client.workspaceSymbols("AddUniqueCon"), (s) => s.length > 0);
 			check("...and indexes the new analyzer's passes", kb.length > 0, `${other.name}: ${kb.length}`);
 		}
+
+		if (options.run) await runChecks(studio, check);
 	} catch (err) {
 		check("the self test ran to the end", false, err instanceof Error ? err.message : String(err));
 	}
 	return { ok: checks.every((c) => c.ok), checks };
+}
+
+async function runChecks(studio: Studio, check: (name: string, ok: boolean, got: unknown) => void): Promise<void> {
+	await studio.openAnalyzer("hello-studio");
+	const result = await studio.run();
+	let greetings: unknown;
+	try {
+		greetings = JSON.parse(result.output?.["output.json"] ?? "null")?.greetings;
+	} catch {
+		greetings = undefined;
+	}
+	check("the run server runs the sample to its output", result.status === "ok" && greetings === 3,
+		{ status: result.status, message: result.message, greetings });
+
+	studio.panel.showTab("tree");
+	const greetingNodes = [...document.querySelectorAll<HTMLButtonElement>("#results .results-body button.node")]
+		.filter((b) => b.dataset.name === "_greeting");
+	check("the parse tree shows the three greetings", greetingNodes.length === 3, greetingNodes.length);
+
+	greetingNodes[0]?.click();
+	const input = studio.editor.getModel();
+	const selected = input ? input.getValueInRange(studio.editor.getSelection()!) : "";
+	check("clicking a tree node selects its text in the input",
+		studio.currentPath === "input/hello.txt" && selected === "hello world", { path: studio.currentPath, selected });
+
+	greetingNodes[0]?.parentElement?.querySelector<HTMLButtonElement>("button.rule")?.click();
+	const position = studio.editor.getPosition();
+	const ruleLine = position ? studio.editor.getModel()!.getLineContent(position.lineNumber) : "";
+	check("a node's rule link opens the rule that built it",
+		studio.currentPath === "spec/greeting.nlp" && ruleLine.includes("_greeting"), { path: studio.currentPath, ruleLine });
+
+	studio.openPath("spec/output.nlp");
+	const output = studio.editor.getModel()!;
+	output.setValue("@CODE\nNoSuchFunction(1);\n@@CODE\n");
+	const failed = await studio.run();
+	const problem = failed.problems?.find((p) => p.message.includes("Unknown fn"));
+	check("a run error names its pass file and line", problem?.file === "spec/output.nlp" && problem.line === 2,
+		failed.problems);
+	const runMarkers = monaco.editor.getModelMarkers({ owner: RUN_MARKERS, resource: output.uri });
+	check("...and marks that line in the editor", runMarkers.some((m) => m.startLineNumber === 2),
+		runMarkers.map((m) => m.startLineNumber));
 }

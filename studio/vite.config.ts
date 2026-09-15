@@ -1,5 +1,9 @@
 import { defineConfig } from "vite";
 
+// The run server (server/app.py) answers /api/ for `npm run dev` and `npm run
+// preview`. NLP_RUN_SERVER points at one somewhere other than its default address.
+const RUN_SERVER = process.env.NLP_RUN_SERVER ?? "http://127.0.0.1:8765";
+
 // A static site: relative asset paths, so dist/ works from any folder or host.
 // The language server is not built here -- it is the committed
 // public/language-server/browserServer.js (see SOURCE.md there).
@@ -11,4 +15,6 @@ export default defineConfig({
 		chunkSizeWarningLimit: 5000,
 	},
 	worker: { format: "es" },
+	server: { proxy: { "/api": RUN_SERVER } },
+	preview: { proxy: { "/api": RUN_SERVER } },
 });

@@ -10,6 +10,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:server": "python -m unittest discover -s server",
+    "server": "python server/app.py",
     "selftest": "python scripts/selftest.py dist",
     "samples": "node scripts/copy-samples.mjs"
   },

@@ -27,7 +27,7 @@ export function pathOf(uri: string, analyzer: string): string | undefined {
 }
 
 export interface Pass {
-	n: number | null;       // position among the passes that run; null when switched off
+	n: number | null;       // the engine's pass number; null for a folder or stub, which take none
 	kind: string;           // nlp, pat, rec, tokenize, dicttokz, folder, stub, ...
 	name: string;
 	active: boolean;
@@ -37,6 +37,10 @@ export interface Pass {
 
 // spec/analyzer.seq as passes, in the order the engine runs them. A leading "/"
 // switches a pass off; `end` lines close a folder or stub and are not passes.
+//
+// Numbering follows the engine, because a run reports problems and parse-tree
+// nodes by pass number: a switched-off pass keeps its number (the engine counts
+// it), a folder or stub has none. Measured on NLPPlus 2.2.37.
 export function passes(seq: string, files: string[]): Pass[] {
 	const have = new Set(files);
 	const out: Pass[] = [];
@@ -49,7 +53,7 @@ export function passes(seq: string, files: string[]): Pass[] {
 		const [kind = "", name = ""] = body.trim().split(/\s+/);
 		if (!kind || kind === "end") continue;
 		const file = [`spec/${name}.nlp`, `spec/${name}.pat`].find((f) => have.has(f)) ?? null;
-		const counted = active && kind !== "folder" && kind !== "stub";
+		const counted = kind !== "folder" && kind !== "stub";
 		out.push({ n: counted ? ++n : null, kind, name, active, comment: rest.join("#").trim(), file });
 	}
 	return out;

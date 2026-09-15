@@ -13,6 +13,10 @@
           <span class="muted">Analyzer</span>
           <select id="analyzer" aria-label="Analyzer"></select>
         </label>
+        <span class="pick">
+          <button id="run" type="button" class="run" title="Run the analyzer on the input file (F5)" disabled>Run</button>
+          <span id="run-on" class="muted"></span>
+        </span>
         <span id="status" class="muted grow">Starting…</span>
         <button id="theme" type="button" title="Light or dark">Theme</button>
       </header>
@@ -22,6 +26,17 @@
           <div id="path" class="path mono"></div>
           <div id="editor" class="editor"></div>
           <div id="problems" class="problems"></div>
+          <section id="results" class="results" aria-label="Run results" hidden>
+            <div class="results-bar" role="tablist">
+              <button type="button" role="tab" data-tab="output">Output</button>
+              <button type="button" role="tab" data-tab="tree">Parse tree</button>
+              <button type="button" role="tab" data-tab="problems">Problems</button>
+              <button type="button" role="tab" data-tab="log">Log</button>
+              <span class="results-summary grow"></span>
+              <button type="button" class="results-close" title="Close" aria-label="Close run results">×</button>
+            </div>
+            <div class="results-body"></div>
+          </section>
         </section>
       </main>
     </div>

@@ -76,9 +76,60 @@ The first slice of phase 2 is the editor, in [../studio/](../studio/), and it ne
   function is known to every pass without pressing save.
 - **Checked in a real browser.** `npm run selftest` opens the build headless and the page
   checks itself through the editor: go to definition across passes, hover, completion,
-  outline, a misspelled call flagged with its fix, and switching analyzers.
+  outline, a misspelled call flagged with its fix, and switching analyzers — and, with a
+  run server, running the sample, clicking through its parse tree, and a run error landing
+  on its line.
 
-Running an analyzer is the next slice and is where the server below comes in.
+### Running analyzers (implemented)
+
+**Run** sends the analyzer as it stands in the editor, with the text of one input file, to
+the run server (`studio/server/app.py`), and shows what comes back under the editor: the
+files the analyzer wrote, the final parse tree, problems, and the engine's log.
+
+- **Python, not Node.** The target design above hosts the engine in-process through
+  `nlpplus`. The run server uses the NLPPlus Python package (pinned, 2.2.37) instead — the
+  build already run against real analyzers elsewhere — and needs nothing besides it and the
+  standard library.
+- **One process per run, not the engine in-process.** The engine caches analyzers by name
+  for the life of its process, an NLP++ loop can run forever, and some mistakes stop the
+  engine outright (writing an attribute with no base knowledge base is one). So each run
+  gets a fresh process and a temporary folder: the server kills it at the timeout (10 s by
+  default) and reports a crash rather than dying of one. A process costs about half a
+  second to start.
+- **Results are the files the engine writes.** `output/final.tree` is the parse tree;
+  `logs/make_ana.log` and `output/err.log` hold build and run errors as
+  `<pass> <line> [message]`; the rest of `output/` is the analyzer's own. Each tree node
+  carries the pass and rule line that built it, so the panel links a node to its rule, a
+  problem to its line, and marks that line in the editor.
+- **Pass numbers are the engine's.** A switched-off pass (`/nlp name`) keeps its number and
+  a folder or stub has none. That was measured, not assumed, and both the page
+  (`analyzers.ts`) and the server number `analyzer.seq` the same way.
+- **Offsets.** The tree gives byte and code-point offsets. The page converts code points to
+  UTF-16 before selecting text, so text beyond the Basic Multilingual Plane (emoji)
+  selects correctly.
+
+#### The run server is not a sandbox
+
+NLP++ has `system()`, and file functions that take any path (`openfile`, `readfile`,
+`mkdir`, ...). Running someone's analyzer is running their code.
+
+What the server does. Before running, it refuses an analyzer that calls `system()`,
+`urltofile()`, `resolveurl()`, `deletefile()`, `unpackdirs()`, the `db*()` functions or the
+desktop app's popups. It drops credential-like variables from the run's environment and
+gives every run its own temporary folder, a wall-clock timeout, size limits on the request
+and on what comes back, and a cap on concurrent runs — plus CPU, file-size and memory
+limits on Linux.
+
+What it does not do is contain the file functions. They cannot be refused — the
+knowledge-base library every template ships uses them — so an analyzer can read and write
+anything the server's user can. On a developer's own machine that is no more than running
+the analyzer in VS Code, and that is the case this slice is for: the server listens on
+127.0.0.1 and has no authentication.
+
+Before strangers can run analyzers, the operating system has to contain the run process: a
+container or sandbox per run (nsjail, bubblewrap, gVisor) with a read-only filesystem apart
+from the run folder, no network, an unprivileged user and no host secrets — and
+authentication or rate limits in front. That is deployment work, not done here.
 
 ### Why the engine stays server-side
 
