@@ -17,8 +17,8 @@ import { NlpLanguageClient, installLanguageFeatures } from "./lsp/client";
 import { languageFor } from "./lsp/convert";
 import { type AnalyzerEntry, type Pass, fileUri, loadFiles, loadIndex, passes, pathOf } from "./analyzers";
 import {
-	type Account, type FoundAnalyzer, type RecentAnalyzer, type RepoAnalyzers, type Repository,
-	SIGN_IN_URL, account, analyzersIn, entryName, recent, remember, repositories, signOut,
+	type Account, type CommitResult, type FoundAnalyzer, type RecentAnalyzer, type RepoAnalyzers, type Repository,
+	SIGN_IN_URL, account, analyzersIn, commitChanges as sendCommit, entryName, recent, remember, repositories, signOut,
 } from "./github/api";
 import { DraftStore } from "./drafts";
 import { safeFolder, zipAnalyzer } from "./zipfiles";
@@ -107,6 +107,12 @@ export class Studio {
 		});
 
 		byId("download").addEventListener("click", () => this.download());
+		byId("commit").addEventListener("click", () => this.showCommitDialog());
+		byId<HTMLFormElement>("commit-form").addEventListener("submit", (event) => {
+			event.preventDefault();
+			void this.submitCommitDialog();
+		});
+		byId("commit-cancel").addEventListener("click", () => byId<HTMLDialogElement>("commit-dialog").close());
 		byId("revert-all").addEventListener("click", () => {
 			const n = this.changedPaths().length;
 			if (n && window.confirm(`Revert ${n} changed file${n === 1 ? "" : "s"} in ${this.current?.title}? Your edits will be lost.`)) {
@@ -295,7 +301,8 @@ export class Studio {
 		}
 	}
 
-	async openFromGitHub(listing: RepoAnalyzers, found: FoundAnalyzer): Promise<void> {
+	// Open an analyzer found in a repository. False, and said in the header, if it could not be.
+	async openFromGitHub(listing: RepoAnalyzers, found: FoundAnalyzer): Promise<boolean> {
 		const entry: AnalyzerEntry = {
 			name: entryName(listing.repo, listing.ref, found.folder),
 			title: found.title,
@@ -312,8 +319,10 @@ export class Studio {
 		try {
 			await this.openAnalyzer(entry.name);
 			this.say(before);
+			return true;
 		} catch (err) {
 			this.say(`Could not open ${found.title} from ${listing.repo}: ${messageOf(err)}`);
+			return false;
 		}
 	}
 
@@ -369,6 +378,89 @@ export class Studio {
 			}
 		}
 		if (this.current) select.value = this.current.name;
+	}
+
+	// ---- Committing to GitHub ----------------------------------------------------------
+
+	// On a branch the studio made, a commit adds to it (and so to its pull request); from
+	// any other branch it goes on a new branch with a pull request. Never onto the branch
+	// the analyzer came from.
+	private commitBranch(): string | undefined {
+		const ref = this.current?.source?.ref;
+		return ref?.startsWith("nlp-studio/") ? ref : undefined;
+	}
+
+	showCommitDialog(): void {
+		const entry = this.current;
+		const source = entry?.source;
+		if (!entry || !source) return;
+		this.flushDrafts();
+		const changed = this.changedPaths();
+		byId("commit-where").textContent = this.commitBranch()
+			? `Adds a commit to ${source.ref}, which updates its pull request.`
+			: `Puts ${changed.length === 1 ? "this change" : "these changes"} on a new branch, with a pull request into ${source.ref} of ${source.repo}.`;
+		byId("commit-files").replaceChildren(...changed.map((path) => {
+			const li = document.createElement("li");
+			li.textContent = `${source.folder ? `${source.folder}/` : ""}${path}`;
+			return li;
+		}));
+		const message = byId<HTMLInputElement>("commit-message");
+		if (!message.value) message.value = `Update ${entry.title}`;
+		byId("commit-result").replaceChildren();
+		byId<HTMLButtonElement>("commit-submit").disabled = changed.length === 0;
+		const dialog = byId<HTMLDialogElement>("commit-dialog");
+		if (!dialog.open) dialog.showModal();
+		message.focus();
+	}
+
+	private async submitCommitDialog(): Promise<void> {
+		const submit = byId<HTMLButtonElement>("commit-submit");
+		const out = byId("commit-result");
+		submit.disabled = true;
+		out.textContent = "Committing…";
+		try {
+			const result = await this.commitChanges(
+				byId<HTMLInputElement>("commit-message").value, byId<HTMLTextAreaElement>("commit-description").value);
+			const done = document.createElement("span");
+			done.textContent = `Committed to ${result.branch}. `;
+			out.replaceChildren(done);
+			if (result.pullRequest) {
+				const link = document.createElement("a");
+				link.href = result.pullRequest.url;
+				link.target = "_blank";
+				link.rel = "noopener";
+				link.textContent = `Pull request #${result.pullRequest.number}`;
+				out.append(link);
+			}
+			byId<HTMLInputElement>("commit-message").value = "";
+			byId<HTMLTextAreaElement>("commit-description").value = "";
+			byId("commit-files").replaceChildren();
+		} catch (err) {
+			out.textContent = messageOf(err);
+			submit.disabled = false;
+		}
+	}
+
+	// Commit the changed files, then carry on editing from where they landed.
+	async commitChanges(message: string, description = ""): Promise<CommitResult> {
+		const entry = this.current;
+		const source = entry?.source;
+		if (!entry || !source) throw new Error("Only an analyzer opened from GitHub can be committed.");
+		this.flushDrafts();
+		const changed = this.changedPaths();
+		if (!changed.length) throw new Error("Nothing has changed since it was opened.");
+		const files = Object.fromEntries(changed.map((path) => [path, this.models.get(path)!.getValue()]));
+		const result = await sendCommit({
+			repo: source.repo, ref: source.ref, commit: source.commit, folder: source.folder,
+			files, message, description, branch: this.commitBranch(),
+		});
+		// The edits are in that commit now: reopen from its branch, at it. Only once that has
+		// worked are the drafts let go -- if it did not, the edits are still in this browser.
+		const reopened = await this.openFromGitHub(
+			{ repo: source.repo, ref: result.branch, commit: result.commit, analyzers: [] },
+			{ folder: source.folder, title: entry.title, files: entry.files });
+		if (reopened) this.drafts.discard(entry.name);
+		return result;
 	}
 
 	// ---- Drafts --------------------------------------------------------------------
@@ -443,7 +535,9 @@ export class Studio {
 			b.closest("li")?.classList.toggle("changed", changed.has(b.dataset.path!));
 		}
 		const note = byId("changes");
+		note.title = "";
 		byId("revert-all").hidden = changed.size === 0;
+		byId("commit").hidden = !(this.current?.source && changed.size && this.account?.signedIn);
 		if (!this.drafts.available) {
 			note.textContent = changed.size ? `${changed.size} changed · NOT kept: this browser blocks storage` : "";
 			note.className = "bad";
@@ -451,7 +545,9 @@ export class Studio {
 			note.textContent = `${changed.size} changed · could not save: browser storage is full`;
 			note.className = "bad";
 		} else {
-			note.textContent = changed.size ? `${changed.size} changed · kept in this browser` : "";
+			// Short, so the header stays on one line; where the edits are kept is in the tooltip.
+			note.textContent = changed.size ? `${changed.size} changed` : "";
+			note.title = changed.size ? "Your edits are kept in this browser until you commit, download or revert them." : "";
 			note.className = "muted";
 		}
 	}
@@ -639,11 +735,13 @@ async function main(): Promise<void> {
 		studio.analyzers.length ? studio.openAnalyzer(studio.analyzers[0].name) : undefined,
 	]);
 	step(`first analyzer open, run server ${health ? "answering" : "not answering"}`);
-	// Whether edits are kept is shown beside the changed-file count; here only when it cannot be.
+	// The header keeps to one line: the engine's version is on the Run button's tooltip, and the
+	// status line only speaks when there is something to know.
+	if (health) {
+		byId("run").title = `Run the analyzer on the input file (F5), with NLPPlus ${health.engine ?? "of an unknown version"}`;
+	}
 	const kept = studio.drafts.available ? "" : "This browser blocks storage, so edits are not kept. ";
-	studio.say(health
-		? `${kept}Run (F5) uses NLPPlus ${health.engine ?? "of an unknown version"}.`
-		: `${kept}Running needs the run server: see the README.`);
+	studio.say(health ? kept.trim() : `${kept}Running needs the run server: see the README.`);
 
 	const params = new URLSearchParams(location.search);
 	if (params.has("selftest")) {

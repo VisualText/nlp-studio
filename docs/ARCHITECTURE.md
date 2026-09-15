@@ -168,7 +168,7 @@ This is the first piece of the next step — an editor for invited people, with 
 in GitHub repositories. Drafts hold the work between opening an analyzer from a repository
 and committing it back, on a branch with a pull request.
 
-### Analyzers from GitHub (opening implemented; committing next)
+### Analyzers from GitHub (implemented)
 
 The editor is for invited people, and their analyzers live in GitHub repositories.
 
@@ -187,6 +187,14 @@ The editor is for invited people, and their analyzers live in GitHub repositorie
 - **Drafts follow the repository, branch and folder**, not the commit, so edits carry over when
   the branch moves on. Opened analyzers are remembered in the browser and reopen at the branch's
   latest commit.
+- **Committing back is a pull request, never a push to the branch the analyzer came from.**
+  **Commit…** sends the changed files. The server makes one commit on top of the commit the
+  analyzer was opened at — so it holds exactly the person's changes, and GitHub shows any
+  conflict if the branch has moved — puts it on a new branch
+  `nlp-studio/<login>/<analyzer>-<date-time>` and opens a pull request into the branch it came
+  from. The analyzer then reopens from the new branch; committing again adds to that branch,
+  which updates the pull request, and is refused if the branch has moved on in the meantime.
+  Drafts are let go only once the analyzer has reopened from the commit.
 - With sign-in configured, running analyzers needs a signed-in person too.
 - The whole flow is tested against a stand-in GitHub (`server/fake_github.py`): sign-in,
   refusal of anyone not invited, token refresh and reading in `server/test_github.py`, and

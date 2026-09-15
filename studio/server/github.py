@@ -10,6 +10,9 @@ calls the studio needs on the person's behalf:
                                       (a GitHub App's user token), or /user/repos (a personal token)
     a repository's analyzers      GET /repos/{repo}/commits/{ref}, /repos/{repo}/git/trees/{sha}?recursive=1
     one analyzer's files          GET /repos/{repo}/git/blobs/{sha}
+    committing edits              POST /repos/{repo}/git/trees, /git/commits, then either
+                                      POST /git/refs and /pulls (a new branch and pull request)
+                                      or PATCH /git/refs/heads/{branch} (more on that branch)
 
 An analyzer is any folder holding spec/analyzer.seq, at any depth. Only its spec/,
 kb/ and input/ travel -- never output/, tmp/ or an engine run's *_log/ -- the same
@@ -27,6 +30,7 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 TRAVELS = ("spec", "kb", "input")
 MAX_FILES = 2000
@@ -37,6 +41,17 @@ API_VERSION = "2022-11-28"
 _REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 _REF = re.compile(r"^[A-Za-z0-9._/-]{1,200}$")
 _SHA = re.compile(r"^[0-9a-f]{40}$")
+# The files a commit may touch: an analyzer's own, the same rule as for a run (nlp_run.py).
+_ANALYZER_PATH = re.compile(r"^(spec|kb|input)(/[A-Za-z0-9 _.,()&+@'\-]+)+$")
+
+
+def _slug(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+
+
+def _check_ref(ref: str, what: str = "branch") -> None:
+    if not (_REF.match(ref or "") and ".." not in ref and not ref.startswith("/") and not ref.endswith("/")):
+        raise GitHubError(400, f"Not a {what}: {ref!r}")
 
 
 class GitHubError(Exception):
@@ -153,7 +168,99 @@ class GitHub:
             texts = dict(pool.map(lambda item: (item[0], self._blob(token, repo, item[1]["sha"])), files))
         return dict(sorted(texts.items()))
 
+    # ---- writing ----------------------------------------------------------------
+
+    def now(self) -> datetime:
+        return datetime.now(timezone.utc)
+
+    def commit_analyzer(self, token: str, repo: str, base_ref: str, base_commit: str, folder: str,
+                        files: object, message: str, *, branch: str | None = None,
+                        description: str = "", login: str = "") -> dict:
+        """Commit edited analyzer files, and either open a pull request or add to one.
+
+        The commit sits on top of `base_commit` -- the commit the analyzer was opened at --
+        so it carries exactly the person's changes, whatever the branch has done since.
+        Without `branch` it goes on a new branch with a pull request into `base_ref`. With
+        `branch` (the studio's own branch the analyzer was opened from) it moves that branch
+        on, which updates its pull request; if the branch has moved since, it is refused.
+        """
+        _check_repo(repo)
+        _check_ref(base_ref)
+        if not _SHA.match(base_commit or ""):
+            raise GitHubError(400, "A commit goes on top of the commit the analyzer was opened at: give its full sha.")
+        folder = (folder or "").strip("/")
+        if folder and any(s in ("", ".", "..") for s in folder.split("/")):
+            raise GitHubError(400, f"Not a folder: {folder!r}")
+        if not isinstance(files, dict) or not files or not all(isinstance(k, str) and isinstance(v, str) for k, v in files.items()):
+            raise GitHubError(400, "There is nothing to commit.")
+        for path in files:
+            if not _ANALYZER_PATH.match(path) or any(s in (".", "..") or s != s.strip() for s in path.split("/")):
+                raise GitHubError(400, f"Only an analyzer's spec/, kb/ and input/ files can be committed, not {path!r}.")
+        if sum(len(text.encode("utf-8")) for text in files.values()) > MAX_BYTES:
+            raise GitHubError(413, "These changes are too large to commit here.")
+        message = (message or "").strip()
+        if not message:
+            raise GitHubError(400, "A commit needs a message.")
+        if branch is not None:
+            _check_ref(branch)
+
+        prefix = f"{folder}/" if folder else ""
+        base = self._api(token, f"/repos/{repo}/git/commits/{base_commit}")
+        entries = [{"path": prefix + path, "mode": "100644", "type": "blob", "content": text}
+                   for path, text in sorted(files.items())]
+        try:
+            tree = self._send(token, "POST", f"/repos/{repo}/git/trees", {"base_tree": base["tree"]["sha"], "tree": entries})
+        except GitHubError as err:
+            if err.status in (403, 404):
+                raise GitHubError(403, f"You cannot write to {repo} through NLP Studio: that needs push access for you, "
+                                       "and Contents and Pull requests write access for the app.") from None
+            raise
+        commit = self._send(token, "POST", f"/repos/{repo}/git/commits",
+                            {"message": message, "tree": tree["sha"], "parents": [base_commit]})
+
+        if branch is not None:
+            try:
+                self._send(token, "PATCH", f"/repos/{repo}/git/refs/heads/{branch}", {"sha": commit["sha"], "force": False})
+            except GitHubError as err:
+                if err.status == 422:
+                    raise GitHubError(409, f"{branch} has moved on since you opened this analyzer. "
+                                           "Open it again from that branch, then commit.") from None
+                raise
+            owner = repo.split("/", 1)[0]
+            head = urllib.parse.quote(f"{owner}:{branch}", safe="")
+            pulls = self._api(token, f"/repos/{repo}/pulls?state=open&head={head}")
+            pull = pulls[0] if pulls else None
+            return {"branch": branch, "commit": commit["sha"],
+                    "pullRequest": {"number": pull["number"], "url": pull["html_url"]} if pull else None}
+
+        name = base_name = (f"nlp-studio/{_slug(login) or 'edit'}/"
+                            f"{_slug(folder.rsplit('/', 1)[-1] if folder else repo.split('/', 1)[1]) or 'analyzer'}"
+                            f"-{self.now().strftime('%Y%m%d-%H%M')}")
+        for attempt in range(2, 12):
+            try:
+                self._send(token, "POST", f"/repos/{repo}/git/refs", {"ref": f"refs/heads/{name}", "sha": commit["sha"]})
+                break
+            except GitHubError as err:
+                if err.status != 422:
+                    raise
+                name = f"{base_name}-{attempt}"
+        else:
+            raise GitHubError(409, "Could not find a free branch name for this commit.")
+        pull = self._send(token, "POST", f"/repos/{repo}/pulls", {
+            "title": message.splitlines()[0][:200], "head": name, "base": base_ref,
+            "body": description.strip() or "Edited in NLP Studio.",
+        })
+        return {"branch": name, "commit": commit["sha"], "pullRequest": {"number": pull["number"], "url": pull["html_url"]}}
+
     # ---- plumbing ---------------------------------------------------------------
+
+    def _send(self, token: str, method: str, path: str, payload: dict):
+        return self._request(method, self.api + path, body=json.dumps(payload).encode("utf-8"), headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": API_VERSION,
+            "Content-Type": "application/json",
+        })
 
     def _tree(self, token: str, repo: str, ref: str) -> tuple[str, dict[str, dict]]:
         if not (_SHA.match(ref) or (_REF.match(ref) and ".." not in ref)):

@@ -64,7 +64,8 @@ anyone else reach it.
 
 **Analyzers from GitHub.** Signed in with GitHub, **Open from GitHub** lists the repositories
 you can reach, finds every analyzer in one (any folder holding `spec/analyzer.seq`) and opens
-it, with your edits kept as drafts. The server does the signing in and holds the GitHub token —
+it, with your edits kept as drafts; **Commit…** puts them on a new branch with a pull request
+(and committing again adds to that pull request). The server does the signing in and holds the GitHub token —
 the page never sees it — so it needs a GitHub App, and in its environment:
 
 | Variable | |
