@@ -69,6 +69,26 @@ button.run { background: var(--accent); border-color: var(--accent); color: var(
 .files .revert:hover { background: var(--on); color: var(--ink); }
 #changes { font-size: 12.5px; }
 #changes.bad { color: var(--error); }
+
+/* Signing in, and opening from GitHub */
+a.button { display: inline-block; color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+	border-radius: 6px; padding: 4px 10px; text-decoration: none; }
+a.button:hover { background: var(--on); }
+.github-dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink);
+	padding: 0; width: min(640px, calc(100vw - 32px)); max-height: min(80vh, 720px); }
+.github-dialog::backdrop { background: rgb(0 0 0 / .35); }
+.github-form { display: flex; flex-direction: column; gap: 10px; padding: 16px 18px; max-height: min(80vh, 720px); }
+.github-form h2 { margin: 0; font-size: 16px; }
+.github-form select { min-width: 0; flex: 1; }
+.github-form p { margin: 0; }
+.github-analyzers { list-style: none; margin: 0; padding: 0; overflow: auto; min-height: 0;
+	display: flex; flex-direction: column; gap: 2px; }
+.github-analyzers button { width: 100%; display: flex; justify-content: space-between; gap: 12px; text-align: left;
+	border: 0; background: none; padding: 6px 8px; border-radius: 6px;
+	font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px; }
+.github-analyzers button:hover { background: var(--on); }
+.github-analyzers small { color: var(--muted); font-family: system-ui, sans-serif; white-space: nowrap; }
+.github-actions { display: flex; justify-content: flex-end; }
 .files small { color: var(--muted); padding: 0 6px 2px 24px; font-size: 11.5px; }
 
 .editor-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }

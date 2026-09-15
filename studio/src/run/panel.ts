@@ -27,7 +27,7 @@ const SNIPPET = 48;
 
 const HEADLINE: Record<RunStatus, string> = {
 	ok: "Ran", failed: "Did not build", timeout: "Timed out", crashed: "Engine stopped",
-	rejected: "Not run", busy: "Busy", invalid: "Not run", unavailable: "No run server",
+	rejected: "Not run", busy: "Busy", invalid: "Not run", unauthorized: "Not signed in", unavailable: "No run server",
 };
 
 function make<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", text = ""): HTMLElementTagNameMap[K] {

@@ -23,6 +23,7 @@
           <span id="changes" class="muted"></span>
         </span>
         <span id="status" class="muted grow">Starting…</span>
+        <span id="account" class="pick"></span>
         <button id="theme" type="button" title="Light or dark">Theme</button>
       </header>
       <main class="layout">
@@ -45,6 +46,18 @@
         </section>
       </main>
     </div>
+    <dialog id="github-dialog" class="github-dialog" aria-labelledby="github-title">
+      <form method="dialog" class="github-form">
+        <h2 id="github-title">Open from GitHub</h2>
+        <label class="pick">
+          <span class="muted">Repository</span>
+          <select id="github-repo" aria-label="Repository"></select>
+        </label>
+        <p id="github-note" class="muted"></p>
+        <ol id="github-analyzers" class="github-analyzers"></ol>
+        <div class="github-actions"><button value="cancel">Close</button></div>
+      </form>
+    </dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

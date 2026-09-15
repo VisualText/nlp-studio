@@ -57,7 +57,7 @@ RUN useradd --system --uid 10001 --no-create-home --home-dir /tmp --shell /usr/s
 WORKDIR /app
 COPY server/requirements.txt server/requirements.txt
 RUN pip install --no-cache-dir -r server/requirements.txt
-COPY server/app.py server/child.py server/nlp_run.py server/
+COPY server/app.py server/child.py server/nlp_run.py server/github.py server/sessions.py server/
 COPY --from=site /studio/dist dist
 
 # What this image contains, readable without starting it:

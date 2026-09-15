@@ -42,7 +42,20 @@ CANDIDATES = [
 ]
 
 
-def start_run_server(python: str):
+def stand_in_github():
+    """A fake GitHub holding the studio's sample twice -- in a folder, and deeper -- for the GitHub checks."""
+    sys.path.insert(0, str(STUDIO / "server"))
+    from fake_github import FakeGitHub
+    sample = STUDIO / "samples" / "hello-studio"
+    files = {p.relative_to(sample).as_posix(): p.read_text(encoding="utf-8", errors="replace")
+             for p in sorted(sample.rglob("*")) if p.is_file() and p.relative_to(sample).parts[0] in ("spec", "kb", "input")}
+    repo = {"README.md": "# analyzers\n"}
+    for folder in ("samples/hello-studio", "nested/deep/hello"):
+        repo.update({f"{folder}/{path}": text for path, text in files.items()})
+    return FakeGitHub({"acme/analyzers": repo}, login="selftest", app=False).start()
+
+
+def start_run_server(python: str, github=None):
     """(process, url) for a running run server, or (None, why there is none)."""
     probe = subprocess.run([python, "-c", "import importlib.metadata as m; print(m.version('NLPPlus'))"],
                            capture_output=True, text=True)
@@ -51,8 +64,13 @@ def start_run_server(python: str):
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
+    env = dict(os.environ)
+    if github:
+        # The development token path: GitHub calls with no sign-in (the sign-in redirects
+        # themselves are covered by server/test_github.py).
+        env.update(NLP_STUDIO_GITHUB_TOKEN=github.token, NLP_STUDIO_GITHUB_API=github.url, NLP_STUDIO_GITHUB_WEB=github.url)
     proc = subprocess.Popen([python, str(STUDIO / "server" / "app.py"), "--port", str(port), "--quiet"],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
     url = f"http://127.0.0.1:{port}"
     deadline = time.time() + 60
     while time.time() < deadline and proc.poll() is None:
@@ -80,10 +98,12 @@ def main() -> int:
         print("selftest: no Edge or Chrome found; set BROWSER")
         return 2
 
+    github = None
     if args.no_server:
         run_proc, run_url = None, "--no-server"
     else:
-        run_proc, run_url = start_run_server(os.environ.get("NLP_PYTHON") or sys.executable)
+        github = stand_in_github()
+        run_proc, run_url = start_run_server(os.environ.get("NLP_PYTHON") or sys.executable, github)
     if not run_proc:
         print(f"selftest: run checks skipped ({run_url})")
 
@@ -147,7 +167,12 @@ def main() -> int:
         else:
             proc.kill()
         if run_proc:
-            run_proc.kill()
+            if os.name == "nt":
+                subprocess.run(["taskkill", "/T", "/F", "/PID", str(run_proc.pid)], capture_output=True)
+            else:
+                run_proc.kill()
+        if github:
+            github.stop()
         server.shutdown()
         shutil.rmtree(profile, ignore_errors=True)
 

@@ -5,7 +5,8 @@
 // does not reaching a run server at all ("unavailable"): the studio is a static
 // site, and one deployed without the server still edits, it just cannot run.
 
-export type RunStatus = "ok" | "failed" | "timeout" | "crashed" | "rejected" | "busy" | "invalid" | "unavailable";
+export type RunStatus =
+	"ok" | "failed" | "timeout" | "crashed" | "rejected" | "busy" | "invalid" | "unauthorized" | "unavailable";
 
 export interface RunProblem {
 	file: string | null;  // spec/<pass>.nlp, or null when the engine names no pass

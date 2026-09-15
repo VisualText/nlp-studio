@@ -6,8 +6,16 @@
 export interface AnalyzerEntry {
 	name: string;           // a slug, safe in a URI
 	title: string;          // as the analyzer's folder is named
-	origin: "sample" | "template";
+	origin: "sample" | "template" | "github";
 	files: string[];        // paths inside the analyzer: spec/..., kb/..., input/...
+	source?: GitHubSource;  // where a GitHub analyzer's files are read from
+}
+
+export interface GitHubSource {
+	repo: string;           // owner/name
+	ref: string;            // the branch it was opened from
+	commit: string;         // the sha its files are read at
+	folder: string;         // "" at the top of the repository
 }
 
 // Every file the language server sees sits under this one workspace folder.
@@ -66,6 +74,11 @@ export async function loadIndex(base = "analyzers"): Promise<AnalyzerEntry[]> {
 }
 
 export async function loadFiles(entry: AnalyzerEntry, base = "analyzers"): Promise<Map<string, string>> {
+	if (entry.source) {
+		// Through the studio server, which holds the GitHub token (github/api.ts).
+		const { analyzerFiles } = await import("./github/api");
+		return analyzerFiles(entry.source.repo, entry.source.commit, entry.source.folder);
+	}
 	const texts = await Promise.all(entry.files.map(async (f) => {
 		const url = `${base}/${entry.name}/${f.split("/").map(encodeURIComponent).join("/")}`;
 		const res = await fetch(url);
