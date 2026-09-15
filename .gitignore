@@ -8,6 +8,11 @@ out/
 *.vsix
 stopgap/vsix/
 
+# The studio's analyzers as the page fetches them -- written by
+# studio/scripts/copy-samples.mjs from studio/samples/ and a sibling
+# analyzer-templates checkout, which has no license to commit it under.
+studio/public/analyzers/
+
 .DS_Store
 Thumbs.db
 

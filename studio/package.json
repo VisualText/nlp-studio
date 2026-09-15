@@ -1,0 +1,30 @@
+{
+  "name": "nlp-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "predev": "node scripts/copy-samples.mjs",
+    "dev": "vite",
+    "prebuild": "node scripts/copy-samples.mjs",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "selftest": "python scripts/selftest.py dist",
+    "samples": "node scripts/copy-samples.mjs"
+  },
+  "dependencies": {
+    "@shikijs/core": "4.4.3",
+    "@shikijs/engine-javascript": "4.4.3",
+    "@shikijs/monaco": "4.4.3",
+    "@shikijs/themes": "4.4.3",
+    "monaco-editor": "0.56.0",
+    "vscode-jsonrpc": "9.0.2",
+    "vscode-languageserver-protocol": "3.18.3"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vite": "8.3.0",
+    "vitest": "5.0.1"
+  }
+}

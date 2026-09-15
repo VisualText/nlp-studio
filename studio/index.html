@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NLP Studio</title>
+  </head>
+  <body>
+    <div class="app">
+      <header class="bar">
+        <strong class="brand">NLP Studio</strong>
+        <label class="pick">
+          <span class="muted">Analyzer</span>
+          <select id="analyzer" aria-label="Analyzer"></select>
+        </label>
+        <span id="status" class="muted grow">Starting…</span>
+        <button id="theme" type="button" title="Light or dark">Theme</button>
+      </header>
+      <main class="layout">
+        <nav id="files" class="files" aria-label="Passes and files"></nav>
+        <section class="editor-pane">
+          <div id="path" class="path mono"></div>
+          <div id="editor" class="editor"></div>
+          <div id="problems" class="problems"></div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

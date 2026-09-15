@@ -1,0 +1,4 @@
+tokenize	nil	# Split the text into tokens
+nlp	funcs	# Helper functions the other passes call
+nlp	greeting	# Find greetings such as "hello world"
+nlp	output	# Write what was found to output.json
