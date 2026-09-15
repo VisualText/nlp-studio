@@ -78,8 +78,9 @@ With these set, running analyzers also needs a signed-in, invited person. On you
 `NLP_STUDIO_GITHUB_TOKEN=<a personal access token>` gives the GitHub calls that token instead,
 with no sign-in — never on a server anyone else can reach.
 
-Deploying beside the phase-1 editor, at studio.visualtext.org/studio/ behind the same
-password: [studio/deploy/INSTALL.md](studio/deploy/INSTALL.md).
+Deploying beside the phase-1 editor, at studio.visualtext.org/studio/ — behind the site's
+password, or with GitHub sign-in for invited people:
+[studio/deploy/INSTALL.md](studio/deploy/INSTALL.md).
 
 ## Quick start (phase 1)
 

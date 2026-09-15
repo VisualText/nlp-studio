@@ -365,6 +365,20 @@ class Configuration(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "needs all of"):
             start({"client_id": "id", "client_secret": "", "users": "a", "public_url": "http://x"})
 
+    def test_requiring_sign_in_refuses_to_start_without_it(self):
+        for options in [{}, {"dev_token": "ghp_x"}, {"client_id": "id", "client_secret": "s", "users": "a"}]:
+            with self.subTest(options=options), self.assertRaisesRegex(ValueError, "REQUIRE_SIGN_IN"):
+                start({**options, "require_sign_in": "1"})
+
+    def test_requiring_sign_in_starts_when_it_is_configured(self):
+        server = start({"client_id": "id", "client_secret": "s", "users": "a",
+                        "public_url": "https://studio.visualtext.org/studio", "require_sign_in": "true"})
+        try:
+            self.assertTrue(server.sign_in)
+        finally:
+            server.shutdown()
+            server.server_close()
+
     def test_a_development_token_is_refused_alongside_sign_in(self):
         with self.assertRaisesRegex(ValueError, "development"):
             start({"client_id": "id", "client_secret": "s", "users": "a", "public_url": "http://x", "dev_token": "ghp_x"})
