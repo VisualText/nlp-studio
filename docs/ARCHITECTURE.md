@@ -107,6 +107,15 @@ files the analyzer wrote, the final parse tree, problems, and the engine's log.
 - **Offsets.** The tree gives byte and code-point offsets. The page converts code points to
   UTF-16 before selecting text, so text beyond the Basic Multilingual Plane (emoji)
   selects correctly.
+- **The Linux engine is not the Windows one** — measured on NLPPlus 2.2.37 in CI and WSL,
+  and it matters because the deployed server is Linux:
+  - `openfile("name")` creates nothing. The Linux build opens the file read-write
+    (`nlp-engine lite/fn.cpp`, `fnOpenfile`), which cannot create one, and the analyzer
+    carries on without a word. `openfile("name", "app")` works everywhere — the engine
+    empties `output/` before each run, so appending starts from nothing — and the run
+    server reports a name-only `openfile()` whose file did not appear, at its line.
+  - Log lines end with a NUL byte before the newline; the server strips it.
+  - A missing base knowledge base only warns, where on Windows it stops the engine.
 
 #### The run server is not a sandbox
 

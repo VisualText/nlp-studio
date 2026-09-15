@@ -5,7 +5,10 @@
 
 @CODE
 L("root") = getconcept(findroot(),"greetings");
-L("out") = openfile("output.json");
+# "app", not just the name: on Linux the engine opens a file named without a mode
+# read-write, which cannot create it, and writes nothing. It empties output/ before
+# every run, so appending starts from an empty file here too.
+L("out") = openfile("output.json","app");
 L("out") << "{\"greetings\": " << numval(L("root"),"count") << "}";
 closefile(L("out"));
 @@CODE
