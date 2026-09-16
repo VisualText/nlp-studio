@@ -1,8 +1,8 @@
-// The results of a run: the files it wrote, its problems, the engine's log.
+// The results of a run: its problems, and the engine's log.
 //
-// DOM and data only -- no Monaco. The parse tree is not here: trees can be very large, so
-// they open in the editor (run/treeview.ts), from the file list or this panel's "Open the
-// parse tree" button, through PanelHooks.
+// DOM and data only -- no Monaco. Neither the files the analyzer wrote nor its parse trees
+// are shown here: both are listed in the file list and open in the editor, as they do in the
+// extension's OUTPUT FILES view. This panel keeps what is not a file.
 import type { RunProblem, RunResult, RunStatus } from "./api";
 
 export interface PanelHooks {
@@ -10,7 +10,7 @@ export interface PanelHooks {
 	openTree(name: string): void;
 }
 
-export type Tab = "output" | "problems" | "log";
+export type Tab = "problems" | "log";
 
 const HEADLINE: Record<RunStatus, string> = {
 	ok: "Ran", failed: "Did not build", timeout: "Timed out", crashed: "Engine stopped",
@@ -23,15 +23,6 @@ function make<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", tex
 	if (text) e.textContent = text;
 	if (e instanceof HTMLButtonElement) e.type = "button";
 	return e;
-}
-
-function pretty(name: string, text: string): string {
-	if (!/\.json$/i.test(name)) return text;
-	try {
-		return JSON.stringify(JSON.parse(text), null, 2);
-	} catch {
-		return text;
-	}
 }
 
 export class RunPanel {
@@ -70,7 +61,7 @@ export class RunPanel {
 		const problems = result.problems?.length ?? 0;
 		const problemsTab = this.tabs.find((t) => t.dataset.tab === "problems");
 		if (problemsTab) problemsTab.textContent = problems ? `Problems (${problems})` : "Problems";
-		this.showTab(problems ? "problems" : "output");
+		this.showTab("problems");
 	}
 
 	showTab(tab: Tab): void {
@@ -79,20 +70,8 @@ export class RunPanel {
 		const result = this.result;
 		if (!result) return;
 		if (result.status !== "ok") this.body.append(make("p", "note bad", result.message));
-		if (tab === "output") this.renderOutput(result);
-		else if (tab === "problems") this.renderProblems(result, result.problems ?? []);
+		if (tab === "problems") this.renderProblems(result, result.problems ?? []);
 		else this.renderLog(result.log ?? []);
-	}
-
-	private renderOutput(result: RunResult): void {
-		const files = Object.entries(result.output ?? {});
-		if (!files.length) {
-			if (result.status === "ok") this.body.append(make("p", "note", "The analyzer wrote no output files."));
-			return;
-		}
-		for (const [name, text] of files) {
-			this.body.append(make("h4", "file-name mono", name), make("pre", "file-text mono", pretty(name, text)));
-		}
 	}
 
 	private renderProblems(result: RunResult, problems: RunProblem[]): void {

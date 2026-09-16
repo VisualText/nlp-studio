@@ -100,6 +100,11 @@ files the analyzer wrote, problems, and the engine's log. Its parse trees open i
   `logs/make_ana.log` and `output/err.log` hold build and run errors as
   `<pass> <line> [message]`; the rest of `output/` is the analyzer's own. A problem links to
   its line, which is marked in the editor.
+- **What a run wrote is a file list, not a dump.** As in the extension's OUTPUT FILES view, the
+  files the analyzer wrote are listed by name with their icons under **Output**, and open
+  read-only in the editor (`languageFor` gives each its colouring). Their text comes back with
+  the result, so opening one asks the server for nothing. The results panel keeps only what is
+  not a file: problems, and the engine's log.
 - **Trees open in the editor, one at a time.** Trees get very large, so they are not sent with
   the result. The server moves a run's trees aside (`trees.py`: for the person who ran it, for
   30 minutes, the newest 20 runs and 256 MB) and the page lists them; opening one fetches it
