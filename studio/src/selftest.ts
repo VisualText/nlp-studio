@@ -98,6 +98,17 @@ export async function selfTest(studio: Studio, options: { run: boolean }): Promi
 			{ nodeName, offset, wanted: TREE_COLORS });
 
 		await studio.openAnalyzer("hello-studio");
+
+		// The file list as the extension's ANALYZER SEQUENCE view: the heading, a DNA icon on
+		// every rule pass, and the pass's comment on the mouse-over instead of under it.
+		const headings = [...document.querySelectorAll<HTMLElement>("#files h3")].map((h) => h.textContent);
+		const passButton = document.querySelector<HTMLButtonElement>('#files button[data-path="spec/greeting.nlp"]');
+		const passRow = passButton?.closest(".file-row");
+		check("the sequence is listed as in the extension: DNA icons, and the comment as a mouse-over",
+			headings.includes("Analyzer Sequence") && !!passRow?.querySelector(".file-icon.dna svg")
+			&& (passButton?.title.length ?? 0) > 0 && !passButton?.closest("li")?.querySelector("small"),
+			{ headings, title: passButton?.title, icon: passRow?.querySelector(".file-icon")?.className });
+
 		studio.openPath("spec/greeting.nlp");
 		const greeting = studio.editor.getModel()!;
 

@@ -23,6 +23,7 @@ import {
 	type Account, type CommitResult, type FoundAnalyzer, type RecentAnalyzer, type RepoAnalyzers, type Repository,
 	SIGN_IN_URL, account, analyzersIn, commitChanges as sendCommit, entryName, recent, remember, repositories, signOut,
 } from "./github/api";
+import { type IconName, iconElement, passIcon } from "./icons";
 import { DraftStore } from "./drafts";
 import { safeFolder, zipAnalyzer } from "./zipfiles";
 import { type RunResult, type RunTrees, type TreeFile, fetchTree, runAnalyzer, serverHealth } from "./run/api";
@@ -757,13 +758,16 @@ export class Studio {
 			nav.append(ol);
 			return ol;
 		};
-		const item = (list: HTMLElement, label: string, path: string | null, note = "", off = false) => {
+		const item = (list: HTMLElement, label: string, path: string | null,
+			opts: { note?: string; title?: string; icon?: IconName; off?: boolean } = {}) => {
 			const li = document.createElement("li");
-			if (off) li.classList.add("off");
+			if (opts.off) li.classList.add("off");
 			const row = document.createElement("div");
 			row.className = "file-row";
 			const b = document.createElement(path ? "button" : "span");
 			b.textContent = label;
+			if (opts.title) b.title = opts.title;
+			if (opts.icon) row.append(iconElement(opts.icon));
 			row.append(b);
 			if (path) {
 				b.dataset.path = path;
@@ -776,21 +780,28 @@ export class Studio {
 				row.append(revert);
 			}
 			li.append(row);
-			if (note) {
+			if (opts.note) {
 				const s = document.createElement("small");
-				s.textContent = note;
+				s.textContent = opts.note;
 				li.append(s);
 			}
 			list.append(li);
 		};
 
-		const seqList = section("Passes");
-		item(seqList, "analyzer.seq", "spec/analyzer.seq", "the order they run in");
+		// As the extension's ANALYZER SEQUENCE view: the pass number, its name, an icon for
+		// what kind of pass it is, and its comment on the mouse-over rather than under it.
+		const seqList = section("Analyzer Sequence");
+		item(seqList, "analyzer.seq", "spec/analyzer.seq",
+			{ icon: "blank", title: "The sequence file: the order the passes run in" });
 		for (const p of this.passList) {
 			// A rule pass is known by its file, a folder by its name, and a built-in pass
 			// (tokenize nil) by what it does.
 			const label = `${p.n ?? "–"}  ${p.file || p.n == null ? p.name : p.kind}`;
-			item(seqList, label, p.file, p.comment || p.kind, !p.active);
+			// The extension's tooltip: the comment from the sequence line when it says
+			// something, else the file it runs (sequenceView.ts passTooltip).
+			const says = p.comment || p.file || p.kind;
+			item(seqList, label, p.file,
+				{ icon: passIcon(p.kind, p.active), title: p.active ? says : `${says} — switched off`, off: !p.active });
 		}
 		const kb = entry.files.filter(shownInKnowledgeBase);
 		if (kb.length) {
