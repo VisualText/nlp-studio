@@ -5,11 +5,13 @@
 //                  quick fixes and problems, from the extension's language server
 //                  running in a Web Worker
 //   analyzers.ts   the analyzers to open: the studio's samples, and (github/) any in a
-//                  GitHub repository the person signed in can reach
+//                  GitHub repository the person signed in can reach; their sequence and
+//                  knowledge base are listed by @visualtext/analyzer-views (../analyzer-views)
 //   drafts.ts      edits kept in this browser, until downloaded (zipfiles.ts)
 //   run/           running one: its files go to the run server (server/app.py), and
 //                  the output and problems come back; its parse trees open in the
 //                  editor (run/treeview.ts), read from the server one at a time
+import "@visualtext/analyzer-views/style.css";
 import "./styles.css";
 import EditorWorker from "monaco-editor/editor/editor.worker.js?worker";
 import { monaco } from "./monaco";
@@ -17,14 +19,14 @@ import { installHighlighting, THEMES } from "./highlight";
 import { NlpLanguageClient, installLanguageFeatures } from "./lsp/client";
 import { languageFor } from "./lsp/convert";
 
+import { type AnalyzerEntry, fileUri, loadFiles, loadIndex, pathOf } from "./analyzers";
 import {
-	type AnalyzerEntry, type Pass, fileUri, loadFiles, loadIndex, passes, pathOf, shownInKnowledgeBase,
-} from "./analyzers";
+	type IconName, type NlpKnowledgeBase, type NlpSequence, type Pass, fileIcon, iconElement, passes,
+} from "@visualtext/analyzer-views";
 import {
 	type Account, type CommitResult, type FoundAnalyzer, type RecentAnalyzer, type RepoAnalyzers, type Repository,
 	SIGN_IN_URL, account, analyzersIn, commitChanges as sendCommit, entryName, recent, remember, repositories, signOut,
 } from "./github/api";
-import { type IconName, fileIcon, iconElement, passIcon } from "./icons";
 import { DraftStore } from "./drafts";
 import { safeFolder, zipAnalyzer } from "./zipfiles";
 import { type RunResult, type RunTrees, type TreeFile, fetchTree, runAnalyzer, serverHealth } from "./run/api";
@@ -352,7 +354,9 @@ export class Studio {
 			: el.dataset.tree
 				? el.dataset.tree === this.currentTree
 				: el.dataset.output === this.currentOutput);
-		for (const el of byId("files").querySelectorAll<HTMLElement>("button[data-path], button[data-tree], button[data-output]")) {
+		for (const list of this.sharedLists()) list.selected = this.currentPath;
+		for (const el of byId("files").querySelectorAll<HTMLElement>(
+			".studio-list button[data-path], button[data-tree], button[data-output]")) {
 			el.classList.toggle("on", on(el));
 		}
 	}
@@ -633,6 +637,15 @@ export class Studio {
 		this.showChanges();
 	}
 
+	// The file list's <nlp-sequence> and <nlp-knowledge-base>.
+	private sharedLists(): NodeListOf<NlpSequence | NlpKnowledgeBase> {
+		return byId("files").querySelectorAll<NlpSequence | NlpKnowledgeBase>("nlp-sequence, nlp-knowledge-base");
+	}
+
+	private confirmRevert(path: string): void {
+		if (window.confirm(`Revert ${path}? Your edits to it will be lost.`)) this.revert(path);
+	}
+
 	// Forget an analyzer's drafts without opening it (the self test starts clean this way).
 	forgetDrafts(analyzer: string): void {
 		if (this.current?.name === analyzer) this.flushDrafts();
@@ -676,7 +689,8 @@ export class Studio {
 
 	private showChanges(): void {
 		const changed = new Set(this.changedPaths());
-		for (const b of byId("files").querySelectorAll<HTMLElement>("button[data-path]")) {
+		for (const list of this.sharedLists()) list.changed = changed;
+		for (const b of byId("files").querySelectorAll<HTMLElement>(".studio-list button[data-path]")) {
 			b.closest("li")?.classList.toggle("changed", changed.has(b.dataset.path!));
 		}
 		const note = byId("changes");
@@ -795,64 +809,51 @@ export class Studio {
 		const entry = this.current!;
 		const nav = byId("files");
 		nav.replaceChildren();
+
+		// The sequence and the knowledge base, as the extension's ANALYZER SEQUENCE and
+		// KNOWLEDGE BASE views: @visualtext/analyzer-views, shared with other pages that list
+		// an analyzer. Each says which file was clicked, or which one to revert.
+		const listen = (list: HTMLElement) => {
+			list.setAttribute("revertable", "");
+			list.addEventListener("nlp-open", (e) => this.openPath(e.detail.path));
+			list.addEventListener("nlp-revert", (e) => this.confirmRevert(e.detail.path));
+			nav.append(list);
+		};
+		const sequence = document.createElement("nlp-sequence");
+		sequence.files = entry.files;
+		sequence.sequence = this.models.get("spec/analyzer.seq")?.getValue() ?? "";
+		listen(sequence);
+		const kb = document.createElement("nlp-knowledge-base");
+		kb.files = entry.files;
+		listen(kb);
+
+		// The studio's own lists, drawn with the same rows until they move there too.
 		const section = (title: string) => {
 			const h = document.createElement("h3");
+			h.className = "nlp-heading";
 			h.textContent = title;
 			nav.append(h);
 			const ol = document.createElement("ol");
+			ol.className = "nlp-list studio-list";
 			nav.append(ol);
 			return ol;
 		};
-		const item = (list: HTMLElement, label: string, path: string | null,
-			opts: { note?: string; title?: string; icon?: IconName; off?: boolean } = {}) => {
+		const item = (list: HTMLElement, label: string, path: string, opts: { title?: string; icon?: IconName } = {}) => {
 			const li = document.createElement("li");
-			if (opts.off) li.classList.add("off");
+			li.className = "nlp-item";
 			const row = document.createElement("div");
-			row.className = "file-row";
-			const b = document.createElement(path ? "button" : "span");
-			b.textContent = label;
+			row.className = "nlp-row";
+			const b = button(label, () => this.openPath(path));
+			b.className = "nlp-name";
+			b.dataset.path = path;
 			if (opts.title) b.title = opts.title;
-			if (opts.icon) row.append(iconElement(opts.icon));
-			row.append(b);
-			if (path) {
-				b.dataset.path = path;
-				b.addEventListener("click", () => this.openPath(path));
-				const revert = button("↺", () => {
-					if (window.confirm(`Revert ${path}? Your edits to it will be lost.`)) this.revert(path);
-				});
-				revert.className = "revert";
-				revert.title = `Revert ${path} to how it was opened`;
-				row.append(revert);
-			}
+			const revert = button("↺", () => this.confirmRevert(path));
+			revert.className = "nlp-revert";
+			revert.title = `Revert ${path} to how it was opened`;
+			row.append(iconElement(opts.icon ?? "blank"), b, revert);
 			li.append(row);
-			if (opts.note) {
-				const s = document.createElement("small");
-				s.textContent = opts.note;
-				li.append(s);
-			}
 			list.append(li);
 		};
-
-		// As the extension's ANALYZER SEQUENCE view: the pass number, its name, an icon for
-		// what kind of pass it is, and its comment on the mouse-over rather than under it.
-		const seqList = section("Analyzer Sequence");
-		item(seqList, "analyzer.seq", "spec/analyzer.seq",
-			{ icon: "blank", title: "The sequence file: the order the passes run in" });
-		for (const p of this.passList) {
-			// A rule pass is known by its file, a folder by its name, and a built-in pass
-			// (tokenize nil) by what it does.
-			const label = `${p.n ?? "–"} ${p.file || p.n == null ? p.name : p.kind}`;
-			// The extension's tooltip: the comment from the sequence line when it says
-			// something, else the file it runs (sequenceView.ts passTooltip).
-			const says = p.comment || p.file || p.kind;
-			item(seqList, label, p.file,
-				{ icon: passIcon(p.kind, p.active), title: p.active ? says : `${says} — switched off`, off: !p.active });
-		}
-		const kb = entry.files.filter(shownInKnowledgeBase);
-		if (kb.length) {
-			const list = section("Knowledge base");
-			for (const f of kb) item(list, f.slice(3), f, { icon: fileIcon(f), title: f });
-		}
 		const input = entry.files.filter((f) => f.startsWith("input/"));
 		if (input.length) {
 			const list = section("Input");
@@ -865,9 +866,11 @@ export class Studio {
 			const list = section("Output");
 			for (const name of wrote) {
 				const li = document.createElement("li");
+				li.className = "nlp-item";
 				const row = document.createElement("div");
-				row.className = "file-row";
+				row.className = "nlp-row";
 				const open = button(name, () => this.openOutput(name));
+				open.className = "nlp-name";
 				open.dataset.output = name;
 				open.title = `Open ${name}, as the run wrote it`;
 				row.append(iconElement(fileIcon(name)), open);
@@ -882,9 +885,11 @@ export class Studio {
 			const files = [...trees.files].sort((a, b) => (a.pass ?? -1) - (b.pass ?? -1));
 			for (const f of files) {
 				const li = document.createElement("li");
+				li.className = "nlp-item";
 				const row = document.createElement("div");
-				row.className = "file-row";
+				row.className = "nlp-row";
 				const open = button(f.pass === null ? "final" : `${f.pass} ${f.passName ?? ""}`, () => void this.openTree(f.name));
+				open.className = "nlp-name";
 				open.dataset.tree = f.name;
 				open.title = `Open the ${treeTitle(f)}`;
 				row.append(iconElement("tree"), open);

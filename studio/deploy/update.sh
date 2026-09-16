@@ -2,7 +2,7 @@
 #
 # Keep the NLP Studio app (studio.visualtext.org/studio/) current.
 #
-# The image is built from this checkout's studio/ plus the analyzer templates of
+# The image is built from this checkout's studio/ and analyzer-views/, plus the analyzer templates of
 # the latest visualtext-files release, and is rebuilt when either moves: a new
 # commit here (after a deliberate git pull on the server) or a new release. Same
 # shape as stopgap/scripts/update-studio.sh: build a candidate, smoke-test it away
@@ -75,7 +75,7 @@ WANT_VT_FILES="$(curl -fsSL --retry 3 --retry-delay 2 "${auth[@]}" \
 WANT_COMMIT="$(git -C "$REPO" rev-parse --short=12 HEAD)" || die "$REPO is not a git checkout"
 # Edits on the server that were never committed are labelled as such, so --check
 # and the image labels do not claim a commit the image does not match.
-if [ -n "$(git -C "$REPO" status --porcelain -- studio)" ]; then
+if [ -n "$(git -C "$REPO" status --porcelain -- studio analyzer-views)" ]; then
     WANT_COMMIT="$WANT_COMMIT-dirty"
 fi
 
@@ -123,7 +123,7 @@ docker build \
     --build-arg "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     -t "$IMAGE_NEW" \
     -f "$STUDIO/Dockerfile" \
-    "$STUDIO" \
+    "$REPO" \
     || die "build failed -- live app untouched, still on $HAVE_COMMIT"
 
 say "smoke-testing $IMAGE_NEW"

@@ -53,56 +53,9 @@ button.run { background: var(--accent); border-color: var(--accent); color: var(
 @media (max-width: 720px) { .layout { grid-template-columns: 1fr; grid-template-rows: 30vh 1fr; } }
 
 .files { overflow: auto; padding: 8px 10px; background: var(--panel); border-right: 1px solid var(--line); }
-.files h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 12px 4px 4px; }
-.files ol { list-style: none; margin: 0; padding: 0; }
-.files li { display: flex; flex-direction: column; padding: 2px 0; }
-.files li.off { opacity: .55; }
-.files .file-row { display: flex; align-items: center; gap: 2px; min-width: 0; }
-/* The sequence icons, coloured as the extension colours them: the helix pale yellow on dark
-   and black on light, grey when the pass is switched off, the dot violet, the folder grey. */
-.files .file-icon { flex: 0 0 14px; width: 14px; height: 13px; padding: 0; display: inline-flex;
-	align-items: center; justify-content: center; overflow: visible; }
-.files .file-icon svg { width: 100%; height: 100%; }
-/* Every row starts at the same place: icon, then name, hard against the left. */
-.files .file-row > .file-icon + button:not(.revert), .files .file-row > .file-icon + span { padding-left: 4px; }
-.files .file-icon.dna, .files .file-icon.dnar { color: #1d1f21; }
-.files .file-icon.dna-off { color: #939598; }
-.files .file-icon.dot { color: #04009f; }
-.files .file-icon.folder { color: #656565; }
-.files .file-icon.dict { color: #2e3192; }
-.files .file-icon.kbb { color: #4759d6; }
-.files .file-icon.file, .files .file-icon.tree, .files .file-icon.log { color: #424242; }
-.files .file-icon.json { color: #2e3192; }
-@media (prefers-color-scheme: dark) {
-	:root:not([data-theme="light"]) .files .file-icon.dna, :root:not([data-theme="light"]) .files .file-icon.dnar { color: #edec81; }
-	:root:not([data-theme="light"]) .files .file-icon.dot { color: #b5aaff; }
-	:root:not([data-theme="light"]) .files .file-icon.folder { color: #c5c5c5; }
-	:root:not([data-theme="light"]) .files .file-icon.dict { color: #00aeef; }
-	:root:not([data-theme="light"]) .files .file-icon.kbb { color: #ffe680; }
-	:root:not([data-theme="light"]) .files .file-icon.file, :root:not([data-theme="light"]) .files .file-icon.tree { color: #c5c5c5; }
-	:root:not([data-theme="light"]) .files .file-icon.log { color: #e6e6e6; }
-	:root:not([data-theme="light"]) .files .file-icon.json { color: #00aeef; }
-}
-:root[data-theme="dark"] .files .file-icon.dna, :root[data-theme="dark"] .files .file-icon.dnar { color: #edec81; }
-:root[data-theme="dark"] .files .file-icon.dot { color: #b5aaff; }
-:root[data-theme="dark"] .files .file-icon.folder { color: #c5c5c5; }
-:root[data-theme="dark"] .files .file-icon.dict { color: #00aeef; }
-:root[data-theme="dark"] .files .file-icon.kbb { color: #ffe680; }
-:root[data-theme="dark"] .files .file-icon.file, :root[data-theme="dark"] .files .file-icon.tree { color: #c5c5c5; }
-:root[data-theme="dark"] .files .file-icon.log { color: #e6e6e6; }
-:root[data-theme="dark"] .files .file-icon.json { color: #00aeef; }
-/* The name fills the row; the icon before it is sized by its own rule below. */
-.files .file-row > button:not(.revert), .files .file-row > span:not(.file-icon) { flex: 1; min-width: 0; text-align: left; border: 0;
-	background: none; padding: 3px 6px; border-radius: 5px; font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-	font-size: 12.5px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
-.files .file-row > button:not(.revert):hover { background: var(--on); }
-.files .file-row > button.on { background: var(--on); color: var(--on-ink); font-weight: 600; }
-.files .file-row > span:not(.file-icon) { color: var(--muted); }
-/* A changed file: a mark after its name, and its revert button. */
-.files li.changed .file-row > button:not(.revert)::after { content: " ●"; color: var(--warning); }
-.files .revert { display: none; border: 0; background: none; padding: 2px 6px; color: var(--muted); font-size: 13px; }
-.files li.changed .revert { display: inline-block; }
-.files .revert:hover { background: var(--on); color: var(--ink); }
+/* The lists are @visualtext/analyzer-views (its style.css), in the studio's colours. */
+.files { --nlp-muted: var(--muted); --nlp-hover: var(--on); --nlp-selected: var(--on); --nlp-selected-ink: var(--on-ink);
+	--nlp-changed: var(--warning); color: var(--ink); }
 #changes { font-size: 12.5px; }
 #changes.bad { color: var(--error); }
 
@@ -185,22 +138,6 @@ button.run.busy::before { content: ""; display: inline-block; width: 10px; heigh
 .run-file { display: flex; align-items: center; gap: 6px; text-align: left; border: 0; border-radius: 4px;
 	background: none; padding: 3px 6px; }
 .run-file:hover { background: var(--on); }
-.run-file .file-icon { flex: none; width: 14px; height: 13px; display: inline-flex; align-items: center; justify-content: center; }
-.run-file .file-icon svg { width: 100%; height: 100%; }
-.run-file .file-icon.dict { color: #2e3192; }
-.run-file .file-icon.kbb { color: #4759d6; }
-.run-file .file-icon.json { color: #2e3192; }
-.run-file .file-icon.file, .run-file .file-icon.tree, .run-file .file-icon.log { color: #424242; }
-@media (prefers-color-scheme: dark) {
-	:root:not([data-theme="light"]) .run-file .file-icon.dict, :root:not([data-theme="light"]) .run-file .file-icon.json { color: #00aeef; }
-	:root:not([data-theme="light"]) .run-file .file-icon.kbb { color: #ffe680; }
-	:root:not([data-theme="light"]) .run-file .file-icon.file, :root:not([data-theme="light"]) .run-file .file-icon.tree { color: #c5c5c5; }
-	:root:not([data-theme="light"]) .run-file .file-icon.log { color: #e6e6e6; }
-}
-:root[data-theme="dark"] .run-file .file-icon.dict, :root[data-theme="dark"] .run-file .file-icon.json { color: #00aeef; }
-:root[data-theme="dark"] .run-file .file-icon.kbb { color: #ffe680; }
-:root[data-theme="dark"] .run-file .file-icon.file, :root[data-theme="dark"] .run-file .file-icon.tree { color: #c5c5c5; }
-:root[data-theme="dark"] .run-file .file-icon.log { color: #e6e6e6; }
 
 .run-problems { display: flex; flex-direction: column; }
 .run-problem { display: flex; gap: 14px; text-align: left; border: 0; border-radius: 4px; background: none; padding: 4px 6px; }

@@ -1,6 +1,7 @@
-# Test NLP Studio (studio/) on every push and pull request that touches it: the
-# page, the run server, the built page in a browser, and the deployable image
-# under the restrictions it runs with on studio.visualtext.org.
+# Test NLP Studio (studio/) and the lists it shares (analyzer-views/) on every push
+# and pull request that touches them: the package, the page, the run server, the
+# built page in a browser, and the deployable image under the restrictions it runs
+# with on studio.visualtext.org.
 #
 # GitHub-hosted runners ONLY. This workflow runs on pull requests, so it must never
 # use `runs-on: self-hosted` -- the self-hosted runner is the production host
@@ -11,9 +12,9 @@ name: Studio
 on:
   push:
     branches: [main]
-    paths: ["studio/**", ".github/workflows/studio.yml"]
+    paths: ["studio/**", "analyzer-views/**", ".github/workflows/studio.yml"]
   pull_request:
-    paths: ["studio/**", ".github/workflows/studio.yml"]
+    paths: ["studio/**", "analyzer-views/**", ".github/workflows/studio.yml"]
   workflow_dispatch:
 
 permissions:
@@ -34,7 +35,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: studio/package-lock.json
+          cache-dependency-path: |
+            studio/package-lock.json
+            analyzer-views/package-lock.json
 
       - uses: actions/setup-python@v5
         with:
@@ -42,8 +45,15 @@ jobs:
 
       - name: Install
         run: |
+          npm ci --no-audit --no-fund --prefix ../analyzer-views
           npm ci --no-audit --no-fund
           python -m pip install -r server/requirements.txt
+
+      - name: Shared lists (analyzer-views)
+        working-directory: analyzer-views
+        run: |
+          npm run check
+          npm test
 
       - name: Page unit tests
         run: npm test
@@ -65,7 +75,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build the image
-        run: docker build --build-arg "NLP_STUDIO_COMMIT=${GITHUB_SHA::12}" -t nlp-studio:ci studio
+        run: docker build --build-arg "NLP_STUDIO_COMMIT=${GITHUB_SHA::12}" -t nlp-studio:ci -f studio/Dockerfile .
 
       - name: Smoke test
         run: bash studio/deploy/smoke-test.sh nlp-studio:ci
