@@ -308,6 +308,20 @@ async function runChecks(studio: Studio, check: (name: string, ok: boolean, got:
 	check("the run server runs the sample to its output", result.status === "ok" && greetings === 3,
 		{ status: result.status, message: result.message, greetings });
 
+	// What the analyzer wrote is listed like the extension's OUTPUT FILES view, and opens in
+	// the editor rather than being dumped into the panel.
+	const outputs = [...document.querySelectorAll<HTMLElement>("#files button[data-output]")].map((b) => b.dataset.output!);
+	const jsonIcon = document.querySelector('#files button[data-output="output.json"]')
+		?.closest(".file-row")?.querySelector(".file-icon.json svg");
+	check("the files the run wrote are listed with their icons", outputs.includes("output.json") && !!jsonIcon, outputs);
+
+	document.querySelector<HTMLButtonElement>('#files button[data-output="output.json"]')?.click();
+	const openedOutput = studio.editor.getModel();
+	check("...and clicking one opens it in the editor, read-only",
+		studio.currentOutput === "output.json" && (openedOutput?.getValue().includes("greetings") ?? false)
+		&& studio.editor.getOption(monaco.editor.EditorOption.readOnly),
+		{ output: studio.currentOutput, uri: openedOutput?.uri.toString() });
+
 	const listed = () => [...document.querySelectorAll<HTMLElement>("#files button[data-tree]")].map((b) => b.dataset.tree!);
 	check("without Debug, the file list offers only the final parse tree", JSON.stringify(listed()) === '["final.tree"]', listed());
 
