@@ -265,8 +265,9 @@ enumerate, what to show, what a double-click does — ports even though the
 | `logView.ts` | Run log |
 | `findView.ts` | Search results |
 
-The sequence and knowledge-base panels live in [../analyzer-views/](../analyzer-views/) as web
-components (`<nlp-sequence>`, `<nlp-knowledge-base>`) with their rules beside them, so any
+The sequence, knowledge-base and output panels live in [../analyzer-views/](../analyzer-views/) as
+web components (`<nlp-sequence>`, `<nlp-knowledge-base>`, `<nlp-output>`, `<nlp-trees>`) with
+their rules beside them, so any
 page that lists an analyzer draws it the same way and a rule -- such as listing only
 `.dict` and `.kbb` files -- is changed in one place.
 

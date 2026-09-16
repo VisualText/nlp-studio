@@ -2,7 +2,8 @@
 // The rules with no DOM at all, as a server or another page would use them.
 import { describe, expect, it } from "vitest";
 import {
-	fileIcon, fileSize, passComment, passIcon, passLabel, passTooltip, passes, shownInKnowledgeBase,
+	fileIcon, fileSize, outputOrder, passComment, passIcon, passLabel, passTooltip, passes, shownInKnowledgeBase,
+	treeLabel, treeNote, treeOrder, treeTitle,
 } from "../src/rules.js";
 
 describe("analyzer.seq", () => {
@@ -90,5 +91,28 @@ describe("the knowledge base", () => {
 	it("prints a size, and nothing for one it does not know", () => {
 		expect([fileSize(3000), fileSize(100), fileSize(2.5 * 1024 * 1024), fileSize(0), fileSize(undefined)])
 			.toEqual(["3 KB", "1 KB", "2.5 MB", "", ""]);
+	});
+});
+
+describe("what a run wrote", () => {
+	it("lists output files by name", () => {
+		expect(outputOrder(["output.json", { path: "err.log", bytes: 10 }, "a.txt"]).map((f) => f.path))
+			.toEqual(["a.txt", "err.log", "output.json"]);
+	});
+	const trees = [
+		{ name: "ana002.tree", pass: 2, passName: "funcs", bytes: 5000 },
+		{ name: "final.tree", pass: null, bytes: 12000 },
+		{ name: "ana001.tree", pass: 1, passName: null },
+	];
+	it("puts the final tree first, then the tree after each pass in order", () => {
+		expect(treeOrder(trees).map((t) => t.name)).toEqual(["final.tree", "ana001.tree", "ana002.tree"]);
+	});
+	it("names a tree by the pass it was written after", () => {
+		expect(treeOrder(trees).map(treeLabel)).toEqual(["final", "1", "2 funcs"]);
+		expect(treeOrder(trees).map(treeTitle))
+			.toEqual(["final parse tree", "parse tree after pass 1", "parse tree after pass 2 (funcs)"]);
+	});
+	it("says when a tree was written, and its size when known", () => {
+		expect(treeOrder(trees).map(treeNote)).toEqual(["after the last pass · 12 KB", "after pass 1", "after pass 2 · 5 KB"]);
 	});
 });

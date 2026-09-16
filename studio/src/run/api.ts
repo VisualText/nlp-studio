@@ -41,6 +41,12 @@ export interface RunTrees {
 	skipped: string[];                // trees too large to keep
 }
 
+// The files a run wrote, with their sizes in bytes, as <nlp-output> lists them.
+export function outputFiles(run: Pick<RunResult, "output"> | undefined): { path: string; bytes: number }[] {
+	const encoder = new TextEncoder();
+	return Object.entries(run?.output ?? {}).map(([path, text]) => ({ path, bytes: encoder.encode(text).length }));
+}
+
 // One of a run's trees, as text. It is kept on the server for a while after the run.
 export async function fetchTree(run: string, name: string, base = "api"): Promise<string> {
 	let res: Response;

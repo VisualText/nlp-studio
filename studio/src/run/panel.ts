@@ -4,8 +4,7 @@
 // with their icons, as the extension's OUTPUT FILES view does; clicking one opens it in the
 // editor through PanelHooks rather than dumping its text here. The file list holds the same
 // files, and the parse trees, and opens them the same way.
-import { fileIcon, iconElement } from "@visualtext/analyzer-views";
-import type { RunProblem, RunResult, RunStatus } from "./api";
+import { type RunProblem, type RunResult, type RunStatus, outputFiles } from "./api";
 
 export interface PanelHooks {
 	open(path: string, at?: { lineNumber: number; column: number }): void;
@@ -94,22 +93,19 @@ export class RunPanel {
 
 	// The files the run wrote, by name: click one to open it in the editor.
 	private renderOutput(result: RunResult): void {
-		const names = Object.keys(result.output ?? {}).sort();
-		if (!names.length) {
+		const files = outputFiles(result);
+		if (!files.length) {
 			this.body.append(make("p", "note", result.status === "ok"
 				? "The analyzer wrote no output files."
 				: "Nothing was written: the run did not finish."));
 			return;
 		}
-		const list = make("div", "run-files");
-		for (const name of names) {
-			const row = make("button", "run-file");
-			row.title = `Open ${name} in the editor`;
-			row.dataset.output = name;
-			row.append(iconElement(fileIcon(name)), make("span", "what mono", name));
-			row.addEventListener("click", () => this.hooks.openOutput(name));
-			list.append(row);
-		}
+		// The same list as the file list's Output (@visualtext/analyzer-views), without its heading.
+		const list = document.createElement("nlp-output");
+		list.setAttribute("heading", "");
+		list.className = "run-files";
+		list.files = files;
+		list.addEventListener("nlp-open", (e) => this.hooks.openOutput(e.detail.path));
 		this.body.append(list);
 	}
 
