@@ -64,6 +64,8 @@ def stand_in_github():
     repo = {"README.md": "# analyzers\n"}
     for folder in ("samples/hello-studio", "nested/deep/hello"):
         repo.update({f"{folder}/{path}": text for path, text in files.items()})
+    # A dictionary beside the engine's hier.kb: the knowledge base list must show it, and not hier.kb.
+    repo["nested/deep/hello/kb/user/greetings.dict"] = "hello greeting=1\nhi greeting=1\nhey greeting=1\n"
     return FakeGitHub({"acme/analyzers": repo}, login="selftest", app=False).start()
 
 
@@ -119,7 +121,16 @@ def main() -> int:
         run_proc, run_url = None, "--no-server"
     else:
         github = stand_in_github()
-        run_proc, run_url = start_run_server(os.environ.get("NLP_PYTHON") or sys.executable, github)
+        python = os.environ.get("NLP_PYTHON") or sys.executable
+        # A relative NLP_PYTHON (".venv/Scripts/python.exe") becomes a full path here: Windows
+        # will not start a program from a relative path written with forward slashes, and says
+        # only "The system cannot find the file specified".
+        if "/" in python or os.path.sep in python:
+            python = os.path.abspath(python)
+            if not os.path.exists(python):
+                print(f"selftest: NLP_PYTHON is {python}, which does not exist")
+                return 2
+        run_proc, run_url = start_run_server(python, github)
     if not run_proc:
         print(f"selftest: run checks skipped ({run_url})")
 

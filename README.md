@@ -36,9 +36,13 @@ npm run server               # the run server, on http://127.0.0.1:8765
 npm run dev                  # in a second terminal: http://localhost:5173
 ```
 
-Edit an analyzer and press **Run** (F5) to run it on the input file. Its output, parse tree,
-problems and log appear under the editor: click a node in the tree to select its text, or its
-rule link to open the rule that built it. Without the run server the studio still edits —
+Edit an analyzer and press **Run** (F5) to run it on the input file. Its output, problems and
+log appear under the editor, and its parse tree is listed under **Parse trees**: open it and it
+fills the editor, read-only and coloured the way the VS Code extension colours trees — node
+names green, rewrites bold, offsets blue. Hover over a node to see the text it covers; go to
+definition (F12) opens the rule that built it, or selects a token's text in the input. Tick
+**Debug** to also keep the tree after every pass. Trees can be large, so the run server keeps
+them for half an hour and sends one only when it is opened. Without the run server the studio still edits —
 colouring, hover, go to definition, completion, rename and problems all run in the browser,
 the language features in the NLP++ language server from `vscode-nlp` in a Web Worker.
 

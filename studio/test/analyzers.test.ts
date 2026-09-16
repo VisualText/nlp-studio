@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { fileUri, passes, pathOf, ROOT_URI } from "../src/analyzers";
+import { fileUri, passes, pathOf, ROOT_URI, shownInKnowledgeBase } from "../src/analyzers";
+
+describe("the knowledge base list", () => {
+	it("shows dictionaries and .kbb files, not the engine's .kb files", () => {
+		const files = [
+			"kb/user/hier.kb", "kb/user/word.kb", "kb/user/attr.kb", "kb/user/phr.kb",
+			"kb/user/colors.dict", "kb/user/en-full.DICT", "kb/user/facts.kbb", "kb/user/notes.txt",
+			"spec/analyzer.seq", "input/words.dict",
+		];
+		expect(files.filter(shownInKnowledgeBase)).toEqual(["kb/user/colors.dict", "kb/user/en-full.DICT", "kb/user/facts.kbb"]);
+	});
+});
 
 describe("analyzer files as URIs", () => {
 	it("puts every file under the one workspace folder", () => {

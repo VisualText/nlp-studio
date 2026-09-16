@@ -16,6 +16,9 @@
         <span class="pick">
           <button id="run" type="button" class="run" title="Run the analyzer on the input file (F5)" disabled>Run</button>
           <span id="run-on" class="muted"></span>
+          <label class="check" title="Also keep the parse tree after every pass (the engine's debug mode). Slower, and the trees can be large.">
+            <input id="debug" type="checkbox" /> Debug
+          </label>
         </span>
         <span class="pick">
           <button id="download" type="button" title="Download this analyzer, with your edits, as a zip">Download</button>
@@ -36,10 +39,10 @@
           <section id="results" class="results" aria-label="Run results" hidden>
             <div class="results-bar" role="tablist">
               <button type="button" role="tab" data-tab="output">Output</button>
-              <button type="button" role="tab" data-tab="tree">Parse tree</button>
               <button type="button" role="tab" data-tab="problems">Problems</button>
               <button type="button" role="tab" data-tab="log">Log</button>
               <span class="results-summary grow"></span>
+              <button type="button" class="results-tree" title="Open the final parse tree in the editor" hidden>Open parse tree</button>
               <button type="button" class="results-close" title="Close" aria-label="Close run results">×</button>
             </div>
             <div class="results-body"></div>

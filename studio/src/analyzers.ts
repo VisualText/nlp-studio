@@ -67,6 +67,13 @@ export function passes(seq: string, files: string[]): Pass[] {
 	return out;
 }
 
+// The knowledge-base files a person works on: dictionaries and .kbb files. The .kb files
+// (hier.kb, word.kb, attr.kb, phr.kb) are the engine's own record of the knowledge base;
+// they travel with the analyzer -- to runs, downloads and commits -- but are not listed.
+export function shownInKnowledgeBase(path: string): boolean {
+	return path.startsWith("kb/") && /\.(dict|kbb)$/i.test(path);
+}
+
 export async function loadIndex(base = "analyzers"): Promise<AnalyzerEntry[]> {
 	const res = await fetch(`${base}/index.json`);
 	if (!res.ok) throw new Error(`analyzers/index.json: HTTP ${res.status} -- run npm run samples`);

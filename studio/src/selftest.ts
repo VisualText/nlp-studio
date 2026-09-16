@@ -11,9 +11,11 @@
 import { strFromU8, unzipSync } from "fflate";
 import { monaco } from "./monaco";
 import { LANGUAGE_IDS } from "./highlight";
+import { TREE_COLORS } from "./tokencolors";
 import { DraftStore } from "./drafts";
 import { recent } from "./github/api";
 import { type Studio, RUN_MARKERS } from "./main";
+import { treeHover } from "./run/treeview";
 
 interface Check { name: string; ok: boolean; got: unknown }
 
@@ -27,6 +29,32 @@ async function until<T>(get: () => T | Promise<T>, ok: (v: T) => boolean, ms = 8
 		value = await get();
 	}
 	return value;
+}
+
+const rgbOf = (hex: string) =>
+	`rgb(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)})`;
+
+// What colour a token has in colorized HTML. Monaco writes a class (mtk7) per colour in the
+// theme's map and a stylesheet to go with it, so the colour itself is in that sheet.
+function colourOf(html: string, token: string): string {
+	// A token's span may hold more than the word asked for: the tree grammar colours a node
+	// name together with the indent in front of it.
+	const cls = new RegExp(`class="(mtk\\d+)[^"]*">[^<]*${token}<`).exec(html)?.[1];
+	if (!cls) return `"${token}" is not a token of its own`;
+	for (const sheet of [...document.styleSheets]) {
+		let rules: CSSRuleList;
+		try {
+			rules = sheet.cssRules;
+		} catch {
+			continue; // another origin's stylesheet
+		}
+		for (const rule of [...rules]) {
+			if (rule instanceof CSSStyleRule && rule.selectorText.split(",").some((s) => s.trim() === `.${cls}`)) {
+				return rule.style.color;
+			}
+		}
+	}
+	return `no rule for .${cls}`;
 }
 
 function positionOf(model: monaco.editor.ITextModel, text: string, offset = 1): monaco.Position {
@@ -56,6 +84,18 @@ export async function selfTest(studio: Studio, options: { run: boolean }): Promi
 		const tokens = monaco.editor.tokenize('@CODE\nG("x") = 1; # a note\n@@CODE', "nlp").flat();
 		const kinds = new Set(tokens.map((t) => t.type));
 		check("NLP++ is tokenized by its grammar, not as plain text", kinds.size > 2, [...kinds].slice(0, 6));
+
+		// A parse tree, coloured as the VS Code extension colours it: node names green,
+		// offsets blue. Both come from the extension's own rules (tokencolors.ts).
+		const coloured = await monaco.editor.colorize(
+			"_ROOT [0,10,0,10,0,0,node,un]\n   _greeting [0,10,0,10,3,13,node,blt]\n      hello [0,4,0,4,1,0,alpha]\n",
+			"tree", {});
+		const nodeName = colourOf(coloured, "hello");
+		const offset = colourOf(coloured, "13");
+		check("a parse tree is coloured the way the NLP++ extension colours it",
+			nodeName === rgbOf(TREE_COLORS.node)
+			&& (offset === rgbOf(TREE_COLORS.numberLight) || offset === rgbOf(TREE_COLORS.numberDark)),
+			{ nodeName, offset, wanted: TREE_COLORS });
 
 		await studio.openAnalyzer("hello-studio");
 		studio.openPath("spec/greeting.nlp");
@@ -171,6 +211,10 @@ async function githubChecks(studio: Studio, check: (name: string, ok: boolean, g
 		studio.current?.name);
 	check("...with its passes, knowledge base and input", studio.passList.some((p) => p.name === "greeting")
 		&& studio.current!.files.includes("kb/user/hier.kb") && studio.inputPath === "input/hello.txt", studio.current?.files);
+	const kbListed = [...document.querySelectorAll<HTMLElement>("#files button[data-path]")]
+		.map((b) => b.dataset.path!).filter((p) => p.startsWith("kb/"));
+	check("the knowledge base lists the analyzer's .dict and .kbb files, not the engine's .kb files",
+		kbListed.includes("kb/user/greetings.dict") && !kbListed.some((p) => p.endsWith(".kb")), kbListed);
 	check("...and it is remembered for next time", recent().some((r) => r.repo === "acme/analyzers" && r.folder === "nested/deep/hello"),
 		recent());
 
@@ -241,22 +285,59 @@ async function runChecks(studio: Studio, check: (name: string, ok: boolean, got:
 	check("the run server runs the sample to its output", result.status === "ok" && greetings === 3,
 		{ status: result.status, message: result.message, greetings });
 
-	studio.panel.showTab("tree");
-	const greetingNodes = [...document.querySelectorAll<HTMLButtonElement>("#results .results-body button.node")]
-		.filter((b) => b.dataset.name === "_greeting");
-	check("the parse tree shows the three greetings", greetingNodes.length === 3, greetingNodes.length);
+	const listed = () => [...document.querySelectorAll<HTMLElement>("#files button[data-tree]")].map((b) => b.dataset.tree!);
+	check("without Debug, the file list offers only the final parse tree", JSON.stringify(listed()) === '["final.tree"]', listed());
 
-	greetingNodes[0]?.click();
-	const input = studio.editor.getModel();
+	progress("opening the final parse tree");
+	document.querySelector<HTMLButtonElement>('#files button[data-tree="final.tree"]')?.click();
+	const tree = await until(() => studio.editor.getModel(), (m) => m?.getLanguageId() === "tree");
+	const greetingLines = tree ? tree.findMatches("_greeting [", false, false, true, null, false) : [];
+	check("the final parse tree opens in the editor, read-only, with the three greetings",
+		studio.currentTree === "final.tree" && studio.currentPath === undefined && greetingLines.length === 3
+		&& studio.editor.getOption(monaco.editor.EditorOption.readOnly),
+		{ tree: studio.currentTree, language: tree?.getLanguageId(), greetings: greetingLines.length });
+
+	if (tree && greetingLines.length) {
+		const hover = treeHover(tree, greetingLines[0].range.getStartPosition());
+		const hoverText = hover?.contents.map((c) => c.value).join("\n") ?? "";
+		check("hover on a tree node shows the text it covers", hoverText.includes("hello world"), hoverText);
+
+		studio.editor.setPosition(greetingLines[0].range.getStartPosition());
+		studio.editor.trigger("selftest", "editor.action.revealDefinition", null);
+		await until(() => studio.currentPath, (p) => p === "spec/greeting.nlp");
+		const position = studio.editor.getPosition();
+		const ruleLine = position && studio.currentPath ? studio.editor.getModel()!.getLineContent(position.lineNumber) : "";
+		check("go to definition on a node opens the rule that built it",
+			studio.currentPath === "spec/greeting.nlp" && ruleLine.includes("_greeting"), { path: studio.currentPath, ruleLine });
+	}
+
+	await studio.openTree("final.tree");
+	const token = tree?.findMatches("world [", false, false, true, null, false)[0];
+	if (token) {
+		studio.editor.setPosition(token.range.getStartPosition());
+		studio.editor.trigger("selftest", "editor.action.revealDefinition", null);
+		await until(() => studio.currentPath, (p) => p === "input/hello.txt");
+	}
+	const input = studio.currentPath === "input/hello.txt" ? studio.editor.getModel() : null;
 	const selected = input ? input.getValueInRange(studio.editor.getSelection()!) : "";
-	check("clicking a tree node selects its text in the input",
-		studio.currentPath === "input/hello.txt" && selected === "hello world", { path: studio.currentPath, selected });
+	check("go to definition on a token selects its text in the input", selected === "world",
+		{ path: studio.currentPath, selected });
 
-	greetingNodes[0]?.parentElement?.querySelector<HTMLButtonElement>("button.rule")?.click();
-	const position = studio.editor.getPosition();
-	const ruleLine = position ? studio.editor.getModel()!.getLineContent(position.lineNumber) : "";
-	check("a node's rule link opens the rule that built it",
-		studio.currentPath === "spec/greeting.nlp" && ruleLine.includes("_greeting"), { path: studio.currentPath, ruleLine });
+	progress("running with Debug");
+	const debug = document.getElementById("debug") as HTMLInputElement;
+	debug.checked = true;
+	const debugged = await studio.run();
+	debug.checked = false;
+	const names = listed();
+	check("with Debug, the file list offers the tree after every pass as well",
+		debugged.status === "ok" && names.includes("final.tree") && names.includes("ana002.tree") && names.includes("ana003.tree"), names);
+	const treeText = async (name: string) => (await studio.openTree(name)) ? studio.editor.getModel()!.getValue() : null;
+	// Pass 1 tokenizes; pass 3 (greeting) builds the greetings.
+	const afterOne = await treeText("ana001.tree");
+	const afterThree = await treeText("ana003.tree");
+	check("...and the greetings appear in the tree after the pass that builds them, not before",
+		!!afterOne?.includes("world [") && !afterOne.includes("_greeting") && !!afterThree?.includes("_greeting"),
+		{ afterOne: afterOne?.slice(0, 200), afterThree: afterThree?.length, path: document.getElementById("path")?.textContent });
 
 	studio.openPath("spec/output.nlp");
 	const output = studio.editor.getModel()!;

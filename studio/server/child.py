@@ -26,13 +26,15 @@ def limit_resources() -> None:
 
 def main() -> None:
     analyzers, name = sys.argv[1], sys.argv[2]
+    # Debug mode: the engine writes the tree after every pass (output/ana###.tree).
+    develop = sys.argv[3:4] == ["develop"]
     text = sys.stdin.buffer.read().decode("utf-8")
     limit_resources()
 
     import NLPPlus
 
     NLPPlus.set_analyzers_folder(analyzers)
-    NLPPlus.engine.analyze(text, name)
+    NLPPlus.engine.analyze(text, name, develop=develop)
     sys.stdout.write("\n" + DONE + "\n")
     sys.stdout.flush()
     NLPPlus.engine.close()
