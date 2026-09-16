@@ -23,6 +23,7 @@ import {
 	type Account, type CommitResult, type FoundAnalyzer, type RecentAnalyzer, type RepoAnalyzers, type Repository,
 	SIGN_IN_URL, account, analyzersIn, commitChanges as sendCommit, entryName, recent, remember, repositories, signOut,
 } from "./github/api";
+import { type IconName, fileIcon, iconElement, passIcon } from "./icons";
 import { DraftStore } from "./drafts";
 import { safeFolder, zipAnalyzer } from "./zipfiles";
 import { type RunResult, type RunTrees, type TreeFile, fetchTree, runAnalyzer, serverHealth } from "./run/api";
@@ -757,13 +758,16 @@ export class Studio {
 			nav.append(ol);
 			return ol;
 		};
-		const item = (list: HTMLElement, label: string, path: string | null, note = "", off = false) => {
+		const item = (list: HTMLElement, label: string, path: string | null,
+			opts: { note?: string; title?: string; icon?: IconName; off?: boolean } = {}) => {
 			const li = document.createElement("li");
-			if (off) li.classList.add("off");
+			if (opts.off) li.classList.add("off");
 			const row = document.createElement("div");
 			row.className = "file-row";
 			const b = document.createElement(path ? "button" : "span");
 			b.textContent = label;
+			if (opts.title) b.title = opts.title;
+			if (opts.icon) row.append(iconElement(opts.icon));
 			row.append(b);
 			if (path) {
 				b.dataset.path = path;
@@ -776,31 +780,38 @@ export class Studio {
 				row.append(revert);
 			}
 			li.append(row);
-			if (note) {
+			if (opts.note) {
 				const s = document.createElement("small");
-				s.textContent = note;
+				s.textContent = opts.note;
 				li.append(s);
 			}
 			list.append(li);
 		};
 
-		const seqList = section("Passes");
-		item(seqList, "analyzer.seq", "spec/analyzer.seq", "the order they run in");
+		// As the extension's ANALYZER SEQUENCE view: the pass number, its name, an icon for
+		// what kind of pass it is, and its comment on the mouse-over rather than under it.
+		const seqList = section("Analyzer Sequence");
+		item(seqList, "analyzer.seq", "spec/analyzer.seq",
+			{ icon: "blank", title: "The sequence file: the order the passes run in" });
 		for (const p of this.passList) {
 			// A rule pass is known by its file, a folder by its name, and a built-in pass
 			// (tokenize nil) by what it does.
-			const label = `${p.n ?? "–"}  ${p.file || p.n == null ? p.name : p.kind}`;
-			item(seqList, label, p.file, p.comment || p.kind, !p.active);
+			const label = `${p.n ?? "–"} ${p.file || p.n == null ? p.name : p.kind}`;
+			// The extension's tooltip: the comment from the sequence line when it says
+			// something, else the file it runs (sequenceView.ts passTooltip).
+			const says = p.comment || p.file || p.kind;
+			item(seqList, label, p.file,
+				{ icon: passIcon(p.kind, p.active), title: p.active ? says : `${says} — switched off`, off: !p.active });
 		}
 		const kb = entry.files.filter(shownInKnowledgeBase);
 		if (kb.length) {
 			const list = section("Knowledge base");
-			for (const f of kb) item(list, f.slice(3), f);
+			for (const f of kb) item(list, f.slice(3), f, { icon: fileIcon(f), title: f });
 		}
 		const input = entry.files.filter((f) => f.startsWith("input/"));
 		if (input.length) {
 			const list = section("Input");
-			for (const f of input) item(list, f.slice(6), f);
+			for (const f of input) item(list, f.slice(6), f, { icon: "file", title: f });
 		}
 		const trees = this.lastRun?.trees;
 		if (trees) {
@@ -811,10 +822,10 @@ export class Studio {
 				const li = document.createElement("li");
 				const row = document.createElement("div");
 				row.className = "file-row";
-				const open = button(f.pass === null ? "final" : `${f.pass}  ${f.passName ?? ""}`, () => void this.openTree(f.name));
+				const open = button(f.pass === null ? "final" : `${f.pass} ${f.passName ?? ""}`, () => void this.openTree(f.name));
 				open.dataset.tree = f.name;
 				open.title = `Open the ${treeTitle(f)}`;
-				row.append(open);
+				row.append(iconElement("tree"), open);
 				const note = document.createElement("small");
 				note.textContent = `${f.pass === null ? "after the last pass" : `after pass ${f.pass}`} · ${sizeOf(f.size)}`;
 				li.append(row, note);

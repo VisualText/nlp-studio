@@ -58,6 +58,34 @@ button.run { background: var(--accent); border-color: var(--accent); color: var(
 .files li { display: flex; flex-direction: column; padding: 2px 0; }
 .files li.off { opacity: .55; }
 .files .file-row { display: flex; align-items: center; gap: 2px; min-width: 0; }
+/* The sequence icons, coloured as the extension colours them: the helix pale yellow on dark
+   and black on light, grey when the pass is switched off, the dot violet, the folder grey. */
+.files .file-icon { flex: none; width: 14px; height: 13px; display: inline-flex;
+	align-items: center; justify-content: center; }
+.files .file-icon svg { width: 100%; height: 100%; }
+/* Every row starts at the same place: icon, then name, hard against the left. */
+.files .file-row > .file-icon + button:not(.revert), .files .file-row > .file-icon + span { padding-left: 4px; }
+.files .file-icon.dna, .files .file-icon.dnar { color: #1d1f21; }
+.files .file-icon.dna-off { color: #939598; }
+.files .file-icon.dot { color: #04009f; }
+.files .file-icon.folder { color: #656565; }
+.files .file-icon.dict { color: #2e3192; }
+.files .file-icon.kbb { color: #4759d6; }
+.files .file-icon.file, .files .file-icon.tree { color: #424242; }
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) .files .file-icon.dna, :root:not([data-theme="light"]) .files .file-icon.dnar { color: #edec81; }
+	:root:not([data-theme="light"]) .files .file-icon.dot { color: #b5aaff; }
+	:root:not([data-theme="light"]) .files .file-icon.folder { color: #c5c5c5; }
+	:root:not([data-theme="light"]) .files .file-icon.dict { color: #00aeef; }
+	:root:not([data-theme="light"]) .files .file-icon.kbb { color: #ffe680; }
+	:root:not([data-theme="light"]) .files .file-icon.file, :root:not([data-theme="light"]) .files .file-icon.tree { color: #c5c5c5; }
+}
+:root[data-theme="dark"] .files .file-icon.dna, :root[data-theme="dark"] .files .file-icon.dnar { color: #edec81; }
+:root[data-theme="dark"] .files .file-icon.dot { color: #b5aaff; }
+:root[data-theme="dark"] .files .file-icon.folder { color: #c5c5c5; }
+:root[data-theme="dark"] .files .file-icon.dict { color: #00aeef; }
+:root[data-theme="dark"] .files .file-icon.kbb { color: #ffe680; }
+:root[data-theme="dark"] .files .file-icon.file, :root[data-theme="dark"] .files .file-icon.tree { color: #c5c5c5; }
 .files .file-row > button:not(.revert), .files .file-row > span { flex: 1; min-width: 0; text-align: left; border: 0;
 	background: none; padding: 3px 6px; border-radius: 5px; font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
 	font-size: 12.5px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
