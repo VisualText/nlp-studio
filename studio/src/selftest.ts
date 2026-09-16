@@ -109,6 +109,18 @@ export async function selfTest(studio: Studio, options: { run: boolean }): Promi
 			&& (passButton?.title.length ?? 0) > 0 && !passButton?.closest("li")?.querySelector("small"),
 			{ headings, title: passButton?.title, icon: passRow?.querySelector(".file-icon")?.className });
 
+		// In the DOM is not enough: the list's own rule for a span in a row once stretched the
+		// icon across half the row and painted it muted, which hid the helix and pushed the
+		// name off the left. So measure -- a small square, then the name hard against it.
+		const iconBox = passRow?.querySelector(".file-icon")?.getBoundingClientRect();
+		const nameBox = passButton?.getBoundingClientRect();
+		const rowBox = passRow?.getBoundingClientRect();
+		check("...the icon is a small square and the name starts right after it, against the left",
+			!!iconBox && !!nameBox && !!rowBox && iconBox.width > 8 && iconBox.width < 20
+			&& iconBox.left - rowBox.left < 6 && nameBox.left - iconBox.right < 10,
+			{ icon: iconBox?.width, fromLeft: iconBox && rowBox && iconBox.left - rowBox.left,
+				gap: nameBox && iconBox && nameBox.left - iconBox.right });
+
 		studio.openPath("spec/greeting.nlp");
 		const greeting = studio.editor.getModel()!;
 
