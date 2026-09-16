@@ -103,16 +103,16 @@ export async function selfTest(studio: Studio, options: { run: boolean }): Promi
 		// every rule pass, and the pass's comment on the mouse-over instead of under it.
 		const headings = [...document.querySelectorAll<HTMLElement>("#files h3")].map((h) => h.textContent);
 		const passButton = document.querySelector<HTMLButtonElement>('#files button[data-path="spec/greeting.nlp"]');
-		const passRow = passButton?.closest(".file-row");
+		const passRow = passButton?.closest(".nlp-row");
 		check("the sequence is listed as in the extension: DNA icons, and the comment as a mouse-over",
-			headings.includes("Analyzer Sequence") && !!passRow?.querySelector(".file-icon.dna svg")
+			headings.includes("Analyzer Sequence") && !!passRow?.querySelector(".nlp-icon.dna svg")
 			&& (passButton?.title.length ?? 0) > 0 && !passButton?.closest("li")?.querySelector("small"),
-			{ headings, title: passButton?.title, icon: passRow?.querySelector(".file-icon")?.className });
+			{ headings, title: passButton?.title, icon: passRow?.querySelector(".nlp-icon")?.className });
 
 		// In the DOM is not enough: the list's own rule for a span in a row once stretched the
 		// icon across half the row and painted it muted, which hid the helix and pushed the
 		// name off the left. So measure -- a small square, then the name hard against it.
-		const iconBox = passRow?.querySelector(".file-icon")?.getBoundingClientRect();
+		const iconBox = passRow?.querySelector(".nlp-icon")?.getBoundingClientRect();
 		const nameBox = passButton?.getBoundingClientRect();
 		const rowBox = passRow?.getBoundingClientRect();
 		check("...the icon is a small square and the name starts right after it, against the left",
@@ -319,7 +319,7 @@ async function runChecks(studio: Studio, check: (name: string, ok: boolean, got:
 	// the editor rather than being dumped into the panel.
 	const outputs = [...document.querySelectorAll<HTMLElement>("#files button[data-output]")].map((b) => b.dataset.output!);
 	const jsonIcon = document.querySelector('#files button[data-output="output.json"]')
-		?.closest(".file-row")?.querySelector(".file-icon.json svg");
+		?.closest(".nlp-row")?.querySelector(".nlp-icon.json svg");
 	check("the files the run wrote are listed with their icons", outputs.includes("output.json") && !!jsonIcon, outputs);
 
 	document.querySelector<HTMLButtonElement>('#files button[data-output="output.json"]')?.click();

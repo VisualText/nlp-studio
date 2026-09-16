@@ -4,7 +4,7 @@
 // with their icons, as the extension's OUTPUT FILES view does; clicking one opens it in the
 // editor through PanelHooks rather than dumping its text here. The file list holds the same
 // files, and the parse trees, and opens them the same way.
-import { fileIcon, iconElement } from "../icons";
+import { fileIcon, iconElement } from "@visualtext/analyzer-views";
 import type { RunProblem, RunResult, RunStatus } from "./api";
 
 export interface PanelHooks {

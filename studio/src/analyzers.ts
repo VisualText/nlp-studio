@@ -1,4 +1,5 @@
-// The analyzers the studio can open: the list, their files, and their pass order.
+// The analyzers the studio can open: the list, and their files. How their sequence and
+// knowledge base are listed is @visualtext/analyzer-views (../analyzer-views).
 //
 // PURE apart from fetch: public/analyzers/index.json is written by
 // scripts/copy-samples.mjs, and each file is fetched from beside it.
@@ -32,46 +33,6 @@ export function fileUri(analyzer: string, path: string): string {
 export function pathOf(uri: string, analyzer: string): string | undefined {
 	const base = `${ROOT_URI}/${analyzer}/`;
 	return uri.startsWith(base) ? uri.slice(base.length) : undefined;
-}
-
-export interface Pass {
-	n: number | null;       // the engine's pass number; null for a folder or stub, which take none
-	kind: string;           // nlp, pat, rec, tokenize, dicttokz, folder, stub, ...
-	name: string;
-	active: boolean;
-	comment: string;
-	file: string | null;    // spec/<name>.nlp or .pat when the analyzer has it
-}
-
-// spec/analyzer.seq as passes, in the order the engine runs them. A leading "/"
-// switches a pass off; `end` lines close a folder or stub and are not passes.
-//
-// Numbering follows the engine, because a run reports problems and parse-tree
-// nodes by pass number: a switched-off pass keeps its number (the engine counts
-// it), a folder or stub has none. Measured on NLPPlus 2.2.37.
-export function passes(seq: string, files: string[]): Pass[] {
-	const have = new Set(files);
-	const out: Pass[] = [];
-	let n = 0;
-	for (const raw of seq.split(/\r?\n/)) {
-		const line = raw.trim();
-		if (!line || line.startsWith("#") || line.startsWith("/*")) continue;
-		const active = !line.startsWith("/");
-		const [body, ...rest] = line.replace(/^\/+/, "").split("#");
-		const [kind = "", name = ""] = body.trim().split(/\s+/);
-		if (!kind || kind === "end") continue;
-		const file = [`spec/${name}.nlp`, `spec/${name}.pat`].find((f) => have.has(f)) ?? null;
-		const counted = kind !== "folder" && kind !== "stub";
-		out.push({ n: counted ? ++n : null, kind, name, active, comment: rest.join("#").trim(), file });
-	}
-	return out;
-}
-
-// The knowledge-base files a person works on: dictionaries and .kbb files. The .kb files
-// (hier.kb, word.kb, attr.kb, phr.kb) are the engine's own record of the knowledge base;
-// they travel with the analyzer -- to runs, downloads and commits -- but are not listed.
-export function shownInKnowledgeBase(path: string): boolean {
-	return path.startsWith("kb/") && /\.(dict|kbb)$/i.test(path);
 }
 
 export async function loadIndex(base = "analyzers"): Promise<AnalyzerEntry[]> {

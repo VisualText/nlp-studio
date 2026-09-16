@@ -12,6 +12,7 @@ see the parse tree — with no install, no C++ toolchain, and no VS Code.
 |---|---|---|
 | **1. Stopgap** | `openvscode-server` container with the real `dehilster.nlp` extension baked in | **in this repo** — see [stopgap/](stopgap/) |
 | **2. Studio** | Purpose-built web app: Monaco front end + an API server running the engine | **started** — in [studio/](studio/): the editor, and running analyzers through a local run server |
+| **Shared lists** | `@visualtext/analyzer-views`: the pass sequence and knowledge base as web components, for the studio and any other page that lists an analyzer | **in this repo** — see [analyzer-views/](analyzer-views/) |
 | **3. Client-side** | Emscripten/WASM build of the engine for zero-server demos | speculative |
 
 Phase 1 exists to have something live quickly — a "Try NLP++" button for
@@ -29,6 +30,7 @@ Requires Node 20+, and Python 3.11+ to run analyzers. A checkout of
 opens its own sample only.
 
 ```bash
+npm install --prefix analyzer-views   # the shared lists, built before the studio runs
 cd studio
 npm install
 pip install -r server/requirements.txt   # NLPPlus, the engine -- a venv is a good idea

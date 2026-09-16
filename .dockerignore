@@ -1,0 +1,14 @@
+# The studio's image is built from the top of the repository (studio/Dockerfile),
+# and needs only studio/ and analyzer-views/ -- without what npm and the build make.
+*
+!studio
+!analyzer-views
+**/node_modules
+**/dist
+**/__pycache__
+**/.venv
+**/tmp
+studio/public/analyzers
+studio/deploy
+studio/test
+analyzer-views/test

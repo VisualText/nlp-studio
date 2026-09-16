@@ -6,16 +6,19 @@
 // pass, a folder for a folder, and a dot for anything else (tokenize, dicttokz, a stub).
 //
 // The artwork ships as a light and a dark file per icon, differing only in colour. Here the
-// shapes carry `currentColor` instead, and styles.css gives the colour, so one copy serves
+// shapes carry `currentColor` instead, and style.css gives the colour, so one copy serves
 // both themes and the greyed state is the same shape rather than a second drawing.
 
 export type IconName =
-	"dna" | "dna-off" | "dnar" | "dot" | "folder" | "dict" | "kbb" | "file" | "tree" | "json" | "log" | "blank";
+	"dna" | "dna-off" | "dnar" | "dot" | "folder" | "folder-off" | "dict" | "kbb" | "file" | "tree" | "json" | "log" | "blank";
 
 // dna.svg: the double helix, drawn as two strands.
 const HELIX = `<path fill="currentColor" d="M1.3,0c0,1.1,0.4,2.3,1.1,3.1c0.8,0.9,1.8,1.7,2.9,2.4C6.5,6.3,7.8,7.1,9.1,8c0.8,0.6,1.6,1.3,2.2,2.1c0.7,0.9,1.1,2.1,1.2,3.3c0,0.1,0,0.3,0,0.4h-1.2l-0.1-0.9c0-0.3-0.1-0.4-0.4-0.4H2.2l0.5-1c0.1-0.2,0.3-0.3,0.4-0.2h7.5l-0.9-1C9.7,10.1,9.5,10,9.3,10H4.1V9.9c0.5-0.3,1-0.7,1.4-1C5.7,8.8,5.9,8.8,6,8.8h1.7H8c-0.6-0.4-1.1-0.7-1.6-1C6.3,7.7,6.2,7.7,6.1,7.7C5.4,8.1,4.8,8.5,4.2,8.9c-0.8,0.5-1.4,1.2-2,1.9c-0.7,0.8-1,1.9-1,2.9H0c0.1-0.7,0.2-1.3,0.4-2C0.9,10.3,1.8,9.1,3,8.3c0.7-0.5,1.3-1,2-1.4C4.9,6.8,4.8,6.7,4.7,6.7C3.8,6,2.9,5.4,2.1,4.7C0.8,3.5,0,1.8,0,0H1.3z"/><path fill="currentColor" d="M12.5,0c0,1.2-0.4,2.4-1.1,3.4c-0.6,0.8-1.2,1.5-2,2.1C9,5.8,8.6,6.1,8.2,6.4c-0.1,0.1-0.3,0.1-0.4,0C7.5,6.2,7.2,6,6.9,5.8L8,5.1V5C7.4,5,6.8,5,6.3,5c-0.4,0-0.7-0.1-1-0.3C4.9,4.4,4.5,4.1,4.1,3.8V3.7h5.2c0.2,0,0.4-0.1,0.5-0.2c0.3-0.3,0.5-0.6,0.8-1V2.4H3.2C3,2.5,2.8,2.4,2.7,2.2l-0.5-1h8.6c0.3,0,0.4-0.1,0.4-0.4s0-0.6,0.1-0.9L12.5,0z"/>`;
 // dnar.svg: the same helix, with the pink head that marks a recursive pass.
 const RECURSIVE_HEAD = `<path fill="#ee2867" d="M2.2,0h10.3s-.6,3.1-2.1,4.3-2.7,2.1-2.7,2.1c0,0-3.5-2.5-4.7-4s-.8-2.4-.8-2.4Z"/>`;
+
+// folder.svg
+const FOLDER = `<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M14.5 2h-7.492l-1 2h-3.504c-.277 0-.5.224-.5.5v8c0 .276.223.5.5.5h11.996c.275 0 .5-.224.5-.5v-10c0-.276-.225-.5-.5-.5zm-.496 2h-6.496l.5-1h5.996v1z"/></svg>`;
 
 const SVG: Record<Exclude<IconName, "blank">, string> = {
 	dna: `<svg viewBox="0 0 12.5 13.7" aria-hidden="true">${HELIX}</svg>`,
@@ -24,7 +27,8 @@ const SVG: Record<Exclude<IconName, "blank">, string> = {
 	// seq-circle.svg
 	dot: `<svg viewBox="0 0 7.4 7.4" aria-hidden="true"><circle fill="currentColor" cx="3.7" cy="3.7" r="3.7"/></svg>`,
 	// folder.svg
-	folder: `<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M14.5 2h-7.492l-1 2h-3.504c-.277 0-.5.224-.5.5v8c0 .276.223.5.5.5h11.996c.275 0 .5-.224.5-.5v-10c0-.276-.225-.5-.5-.5zm-.496 2h-6.496l.5-1h5.996v1z"/></svg>`,
+	folder: FOLDER,
+	"folder-off": FOLDER,
 	// dict.svg: the D of a dictionary.
 	dict: `<svg viewBox="0 0 512 512" aria-hidden="true"><path fill="currentColor" d="M227.75,220.92c0,4.34,8.08,6.51,24.23,6.51,17.46,0,31.2-5.8,41.19-17.42,9.39-11,14.08-25.49,14.08-43.46s-5.1-30.99-15.3-41.8c-10.3-11.21-23.93-16.81-40.89-16.81-15.55,0-23.32,2.07-23.32,6.21,0,5.96-.1,14.92-.3,26.88-.2,11.96-.3,20.92-.3,26.88s.1,14.67,.3,26.43c.2,11.76,.3,20.62,.3,26.58Z"/><path fill="currentColor" d="M439.18,443.82c14.76-1.3,18.31-5.73,18.16-20.33-.64-60.16-1.32-120.32-1.99-180.48-.82-73.39-1.56-146.79-2.56-220.18C452.52,3.61,448.07-.11,428.75,.04c-99.48,.79-198.97,1.53-298.45,2.24-38.93,.28-64.39,22.01-67,61-2.57,38.46-2.28,77.12-3.03,115.7-1.86,95.34-3.68,190.67-5.31,286.02-.46,26.79,15.25,42.7,41.84,43.1,65.82,.98,131.65,1.96,197.48,2.77,43.88,.54,87.77,.79,131.66,1.18,8.97,.08,16.16-3.11,17.03-12.82,.93-10.42-6.07-14.56-15.39-16.03-3.95-.63-7.8-1.93-11.19-2.8-8.76-19.99,7.69-35.23,22.8-36.56ZM169.52,118.17c-.86-23.17-1.29-40.51-1.29-52.02,0-2.12,1.46-3.38,4.39-3.79,7.17-.81,18.93-1.21,35.29-1.21,31.09,0,51.24,.45,60.42,1.36,23.93,2.42,42.65,8.48,56.18,18.17,12.72,9.09,22.77,21.81,30.14,38.16,7.07,15.45,10.6,31.35,10.6,47.7,0,29.68-9.54,55.43-28.62,77.23-16.86,19.49-40.54,29.73-71.02,30.74-5.86,.2-21.96,.3-48.31,.3-4.95,0-12.39-.15-22.34-.45-9.95-.3-17.39-.45-22.34-.45-2.93,0-4.39-1.16-4.39-3.48,0-11.1,.43-27.79,1.29-50.05,.86-22.26,1.29-38.94,1.29-50.05s-.43-29-1.29-52.17Zm213.42,364.29c-96.85-1.31-193.76-2.61-289.76-3.91-5.6-19.8,7.18-36.53,26.59-37.03,24.58-.63,49.19,.08,73.79,.29,59.77,.5,119.54,1.01,179.31,1.64,4.7,.05,9.39,1.09,15.09,1.8-1.8,13.32-3.29,24.39-5.02,37.22Z"/></svg>`,
 	// kbb.svg: the speech bubble. Its file stacks the same shape seven times; the topmost
@@ -51,19 +55,26 @@ export function fileIcon(path: string): IconName {
 	return "file";
 }
 
-// Which icon a pass gets, as sequenceView.ts decides it. Python passes fall to the dot:
-// the studio does not run them.
-export function passIcon(kind: string, active: boolean): IconName {
-	if (kind === "folder") return "folder";
-	if (kind === "rec") return "dnar";
-	if (kind !== "nlp" && kind !== "pat") return "dot";
+// Which icon a pass gets, as sequenceView.ts decides it: greyed when switched off. Python
+// passes fall to the dot.
+export function passIcon(kind: string, active = true): IconName {
+	const k = kind.toLowerCase();
+	if (k === "folder") return active ? "folder" : "folder-off";
+	if (k === "rec") return "dnar";
+	if (k !== "nlp" && k !== "pat") return "dot";
 	return active ? "dna" : "dna-off";
 }
 
+// The icon's markup: static artwork from this module, never anything a person or a
+// repository wrote. "" for the blank that holds a row's indent.
+export function iconSvg(name: IconName): string {
+	return name === "blank" ? "" : SVG[name];
+}
+
+// The icon as an element: <span class="nlp-icon dna"><svg .../></span>.
 export function iconElement(name: IconName): HTMLElement {
 	const span = document.createElement("span");
-	span.className = `file-icon ${name}`;
-	// Static artwork from this module, never anything a person or a repository wrote.
-	if (name !== "blank") span.innerHTML = SVG[name];
+	span.className = `nlp-icon ${name}`;
+	span.innerHTML = iconSvg(name);
 	return span;
 }

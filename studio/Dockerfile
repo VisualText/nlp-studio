@@ -1,6 +1,9 @@
 # NLP Studio (phase 2): the static site and its run server, in one image.
 #
-#   docker build -t nlp-studio:app studio/
+#   docker build -f studio/Dockerfile -t nlp-studio:app .
+#
+# From the top of the repository: the site is built with analyzer-views/, the
+# sequence and knowledge-base lists it shares with other pages.
 #
 # On studio.visualtext.org, studio/deploy/update.sh builds, tests and swaps this;
 # see studio/deploy/INSTALL.md. Stage one builds the site with Node; stage two is
@@ -33,10 +36,15 @@ RUN set -eu; \
     rm /tmp/visualtext.zip; \
     test -d /visualtext/analyzer-templates
 
-WORKDIR /studio
-COPY package.json package-lock.json ./
+WORKDIR /src/analyzer-views
+COPY analyzer-views/package.json analyzer-views/package-lock.json ./
 RUN npm ci --no-audit --no-fund
-COPY . .
+COPY analyzer-views/ ./
+
+WORKDIR /src/studio
+COPY studio/package.json studio/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY studio/ ./
 ENV ANALYZER_TEMPLATES=/visualtext/analyzer-templates
 RUN npm run build
 
@@ -55,10 +63,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN useradd --system --uid 10001 --no-create-home --home-dir /tmp --shell /usr/sbin/nologin studio
 
 WORKDIR /app
-COPY server/requirements.txt server/requirements.txt
+COPY studio/server/requirements.txt server/requirements.txt
 RUN pip install --no-cache-dir -r server/requirements.txt
-COPY server/app.py server/child.py server/nlp_run.py server/github.py server/sessions.py server/trees.py server/
-COPY --from=site /studio/dist dist
+COPY studio/server/app.py studio/server/child.py studio/server/nlp_run.py studio/server/github.py \
+     studio/server/sessions.py studio/server/trees.py server/
+COPY --from=site /src/studio/dist dist
 
 # What this image contains, readable without starting it:
 #   docker image inspect nlp-studio:app --format '{{json .Config.Labels}}'

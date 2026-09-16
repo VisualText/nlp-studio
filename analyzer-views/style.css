@@ -1,0 +1,98 @@
+/* @visualtext/analyzer-views: the analyzer's lists, drawn as the NLP++ extension draws them.
+
+   Theme it with these properties, on :root or on any element around the lists:
+
+     --nlp-muted          headings, sizes, and rows with nothing to open
+     --nlp-hover          a row under the mouse
+     --nlp-selected       the row of the file open now
+     --nlp-selected-ink   its text
+     --nlp-changed        the mark on a file with unsaved edits
+     --nlp-font           the rows' font
+
+   The icon colours are the extension's own, for light and dark; each is a property too
+   (--nlp-icon-dna, --nlp-icon-dict, ...). Dark follows prefers-color-scheme unless the page
+   says otherwise with data-theme="light" or data-theme="dark" on <html>. */
+
+:root {
+	--nlp-muted: #6b6f76;
+	--nlp-hover: #e3ecfb;
+	--nlp-selected: #e3ecfb;
+	--nlp-selected-ink: #1f4fa3;
+	--nlp-changed: #8a5a00;
+	--nlp-font: ui-monospace, "Cascadia Code", Consolas, monospace;
+
+	/* The helix black on light, grey when the pass is switched off; the dot violet; the
+	   folder grey. */
+	--nlp-icon-dna: #1d1f21;
+	--nlp-icon-dna-off: #939598;
+	--nlp-icon-dot: #04009f;
+	--nlp-icon-folder: #656565;
+	--nlp-icon-folder-off: #a8a8a8;
+	--nlp-icon-dict: #2e3192;
+	--nlp-icon-kbb: #4759d6;
+	--nlp-icon-json: #2e3192;
+	--nlp-icon-file: #424242;
+	--nlp-icon-log: #424242;
+	--nlp-icon-tree: #424242;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) {
+		--nlp-muted: #9aa0a6; --nlp-hover: #243553; --nlp-selected: #243553; --nlp-selected-ink: #a9c7ff;
+		--nlp-changed: #fdd663;
+		/* The helix pale yellow on dark. */
+		--nlp-icon-dna: #edec81; --nlp-icon-dna-off: #939598; --nlp-icon-dot: #b5aaff; --nlp-icon-folder: #c5c5c5;
+		--nlp-icon-folder-off: #7a7a7a; --nlp-icon-dict: #00aeef; --nlp-icon-kbb: #ffe680; --nlp-icon-json: #00aeef;
+		--nlp-icon-file: #c5c5c5; --nlp-icon-log: #e6e6e6; --nlp-icon-tree: #c5c5c5;
+	}
+}
+:root[data-theme="dark"] {
+	--nlp-muted: #9aa0a6; --nlp-hover: #243553; --nlp-selected: #243553; --nlp-selected-ink: #a9c7ff;
+	--nlp-changed: #fdd663;
+	--nlp-icon-dna: #edec81; --nlp-icon-dna-off: #939598; --nlp-icon-dot: #b5aaff; --nlp-icon-folder: #c5c5c5;
+	--nlp-icon-folder-off: #7a7a7a; --nlp-icon-dict: #00aeef; --nlp-icon-kbb: #ffe680; --nlp-icon-json: #00aeef;
+	--nlp-icon-file: #c5c5c5; --nlp-icon-log: #e6e6e6; --nlp-icon-tree: #c5c5c5;
+}
+
+nlp-sequence, nlp-knowledge-base { display: block; }
+nlp-sequence[hidden], nlp-knowledge-base[hidden] { display: none; }
+
+/* An icon, anywhere: a small square in its colour. */
+.nlp-icon { flex: 0 0 14px; width: 14px; height: 13px; padding: 0; display: inline-flex;
+	align-items: center; justify-content: center; overflow: visible; }
+.nlp-icon svg { width: 100%; height: 100%; }
+.nlp-icon.dna, .nlp-icon.dnar { color: var(--nlp-icon-dna); }
+.nlp-icon.dna-off { color: var(--nlp-icon-dna-off); }
+.nlp-icon.dot { color: var(--nlp-icon-dot); }
+.nlp-icon.folder { color: var(--nlp-icon-folder); }
+.nlp-icon.folder-off { color: var(--nlp-icon-folder-off); }
+.nlp-icon.dict { color: var(--nlp-icon-dict); }
+.nlp-icon.kbb { color: var(--nlp-icon-kbb); }
+.nlp-icon.json { color: var(--nlp-icon-json); }
+.nlp-icon.file { color: var(--nlp-icon-file); }
+.nlp-icon.log { color: var(--nlp-icon-log); }
+.nlp-icon.tree { color: var(--nlp-icon-tree); }
+
+.nlp-heading { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--nlp-muted);
+	margin: 12px 4px 4px; }
+.nlp-list { list-style: none; margin: 0; padding: 0; }
+.nlp-item { display: flex; flex-direction: column; padding: 2px 0; }
+.nlp-item.off { opacity: .55; }
+.nlp-item.in-folder { padding-left: 14px; }
+
+/* Every row starts at the same place: icon, then name, hard against the left. */
+.nlp-row { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.nlp-name { flex: 1; min-width: 0; text-align: left; border: 0; background: none; color: inherit;
+	padding: 3px 6px 3px 4px; border-radius: 5px; font-family: var(--nlp-font); font-size: 12.5px;
+	white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+button.nlp-name { cursor: pointer; }
+button.nlp-name:hover { background: var(--nlp-hover); }
+button.nlp-name.on { background: var(--nlp-selected); color: var(--nlp-selected-ink); font-weight: 600; }
+span.nlp-name { color: var(--nlp-muted); }
+.nlp-size { flex: none; font-size: 11.5px; color: var(--nlp-muted); padding: 0 4px; }
+
+/* A changed file: a mark after its name, and its revert button. */
+.nlp-item.changed button.nlp-name::after { content: " ●"; color: var(--nlp-changed); }
+.nlp-revert { display: none; border: 0; background: none; padding: 2px 6px; color: var(--nlp-muted); font-size: 13px;
+	cursor: pointer; border-radius: 5px; }
+.nlp-item.changed .nlp-revert { display: inline-block; }
+.nlp-revert:hover { background: var(--nlp-hover); color: inherit; }
