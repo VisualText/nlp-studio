@@ -23,7 +23,7 @@ import {
 	type Account, type CommitResult, type FoundAnalyzer, type RecentAnalyzer, type RepoAnalyzers, type Repository,
 	SIGN_IN_URL, account, analyzersIn, commitChanges as sendCommit, entryName, recent, remember, repositories, signOut,
 } from "./github/api";
-import { type IconName, iconElement, passIcon } from "./icons";
+import { type IconName, fileIcon, iconElement, passIcon } from "./icons";
 import { DraftStore } from "./drafts";
 import { safeFolder, zipAnalyzer } from "./zipfiles";
 import { type RunResult, type RunTrees, type TreeFile, fetchTree, runAnalyzer, serverHealth } from "./run/api";
@@ -796,7 +796,7 @@ export class Studio {
 		for (const p of this.passList) {
 			// A rule pass is known by its file, a folder by its name, and a built-in pass
 			// (tokenize nil) by what it does.
-			const label = `${p.n ?? "–"}  ${p.file || p.n == null ? p.name : p.kind}`;
+			const label = `${p.n ?? "–"} ${p.file || p.n == null ? p.name : p.kind}`;
 			// The extension's tooltip: the comment from the sequence line when it says
 			// something, else the file it runs (sequenceView.ts passTooltip).
 			const says = p.comment || p.file || p.kind;
@@ -806,12 +806,12 @@ export class Studio {
 		const kb = entry.files.filter(shownInKnowledgeBase);
 		if (kb.length) {
 			const list = section("Knowledge base");
-			for (const f of kb) item(list, f.slice(3), f);
+			for (const f of kb) item(list, f.slice(3), f, { icon: fileIcon(f), title: f });
 		}
 		const input = entry.files.filter((f) => f.startsWith("input/"));
 		if (input.length) {
 			const list = section("Input");
-			for (const f of input) item(list, f.slice(6), f);
+			for (const f of input) item(list, f.slice(6), f, { icon: "file", title: f });
 		}
 		const trees = this.lastRun?.trees;
 		if (trees) {
@@ -822,10 +822,10 @@ export class Studio {
 				const li = document.createElement("li");
 				const row = document.createElement("div");
 				row.className = "file-row";
-				const open = button(f.pass === null ? "final" : `${f.pass}  ${f.passName ?? ""}`, () => void this.openTree(f.name));
+				const open = button(f.pass === null ? "final" : `${f.pass} ${f.passName ?? ""}`, () => void this.openTree(f.name));
 				open.dataset.tree = f.name;
 				open.title = `Open the ${treeTitle(f)}`;
-				row.append(open);
+				row.append(iconElement("tree"), open);
 				const note = document.createElement("small");
 				note.textContent = `${f.pass === null ? "after the last pass" : `after pass ${f.pass}`} · ${sizeOf(f.size)}`;
 				li.append(row, note);

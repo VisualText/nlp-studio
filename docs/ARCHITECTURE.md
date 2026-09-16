@@ -111,9 +111,11 @@ files the analyzer wrote, problems, and the engine's log. Its parse trees open i
   each pass carries the icon `sequenceView.ts` would give it (the DNA helix for a rule pass,
   grey when it is switched off, a pink-headed helix for a recursive one, a folder, a dot for
   anything else), and the sequence line's comment is the mouse-over rather than a second line
-  under the name — the extension's `passTooltip`, file path and all. `src/icons.ts` holds that
-  artwork inlined from `vscode-nlp/resources` (MIT), shapes carrying `currentColor` so one
-  copy serves both themes.
+  under the name — the extension's `passTooltip`, file path and all. The knowledge base, the
+  input and the parse trees carry their icons too (`dict`, `kbb`, `file`, `tree`), as
+  `kbView`/`textView` give them. `src/icons.ts` holds that artwork inlined from
+  `vscode-nlp/resources` (MIT), shapes carrying `currentColor` so one copy serves both themes
+  and a switched-off pass is the same shape in grey rather than a second drawing.
 - **Tree colours are the extension's.** The grammars name scopes no stock theme knows
   (`keyword.node.tree`, `keyword.rewrite.tree`, `keyword.concept.kbb2`), which is why VS Code
   colours them through `editor.tokenColorCustomizations` in the `.vscode/settings.json` that
