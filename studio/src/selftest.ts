@@ -11,6 +11,7 @@
 import { strFromU8, unzipSync } from "fflate";
 import { monaco } from "./monaco";
 import { LANGUAGE_IDS } from "./highlight";
+import { TREE_COLORS } from "./tokencolors";
 import { DraftStore } from "./drafts";
 import { recent } from "./github/api";
 import { type Studio, RUN_MARKERS } from "./main";
@@ -28,6 +29,32 @@ async function until<T>(get: () => T | Promise<T>, ok: (v: T) => boolean, ms = 8
 		value = await get();
 	}
 	return value;
+}
+
+const rgbOf = (hex: string) =>
+	`rgb(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)})`;
+
+// What colour a token has in colorized HTML. Monaco writes a class (mtk7) per colour in the
+// theme's map and a stylesheet to go with it, so the colour itself is in that sheet.
+function colourOf(html: string, token: string): string {
+	// A token's span may hold more than the word asked for: the tree grammar colours a node
+	// name together with the indent in front of it.
+	const cls = new RegExp(`class="(mtk\\d+)[^"]*">[^<]*${token}<`).exec(html)?.[1];
+	if (!cls) return `"${token}" is not a token of its own`;
+	for (const sheet of [...document.styleSheets]) {
+		let rules: CSSRuleList;
+		try {
+			rules = sheet.cssRules;
+		} catch {
+			continue; // another origin's stylesheet
+		}
+		for (const rule of [...rules]) {
+			if (rule instanceof CSSStyleRule && rule.selectorText.split(",").some((s) => s.trim() === `.${cls}`)) {
+				return rule.style.color;
+			}
+		}
+	}
+	return `no rule for .${cls}`;
 }
 
 function positionOf(model: monaco.editor.ITextModel, text: string, offset = 1): monaco.Position {
@@ -57,6 +84,18 @@ export async function selfTest(studio: Studio, options: { run: boolean }): Promi
 		const tokens = monaco.editor.tokenize('@CODE\nG("x") = 1; # a note\n@@CODE', "nlp").flat();
 		const kinds = new Set(tokens.map((t) => t.type));
 		check("NLP++ is tokenized by its grammar, not as plain text", kinds.size > 2, [...kinds].slice(0, 6));
+
+		// A parse tree, coloured as the VS Code extension colours it: node names green,
+		// offsets blue. Both come from the extension's own rules (tokencolors.ts).
+		const coloured = await monaco.editor.colorize(
+			"_ROOT [0,10,0,10,0,0,node,un]\n   _greeting [0,10,0,10,3,13,node,blt]\n      hello [0,4,0,4,1,0,alpha]\n",
+			"tree", {});
+		const nodeName = colourOf(coloured, "hello");
+		const offset = colourOf(coloured, "13");
+		check("a parse tree is coloured the way the NLP++ extension colours it",
+			nodeName === rgbOf(TREE_COLORS.node)
+			&& (offset === rgbOf(TREE_COLORS.numberLight) || offset === rgbOf(TREE_COLORS.numberDark)),
+			{ nodeName, offset, wanted: TREE_COLORS });
 
 		await studio.openAnalyzer("hello-studio");
 		studio.openPath("spec/greeting.nlp");

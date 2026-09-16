@@ -107,6 +107,12 @@ files the analyzer wrote, problems, and the engine's log. Its parse trees open i
   runs the engine in its develop mode, which also writes `output/ana###.tree` after every
   pass. Each tree node carries the pass and rule line that built it, so hover shows a node's
   text and go to definition opens its rule (`run/treeview.ts`).
+- **Tree colours are the extension's.** The grammars name scopes no stock theme knows
+  (`keyword.node.tree`, `keyword.rewrite.tree`, `keyword.concept.kbb2`), which is why VS Code
+  colours them through `editor.tokenColorCustomizations` in the `.vscode/settings.json` that
+  `vscode-nlp` and the analyzer repositories ship. `src/tokencolors.ts` holds those rules, rule
+  for rule, for light and for dark, and `highlight.ts` folds them into both shiki themes.
+  Without them a tree is one flat keyword colour.
 - **Pass numbers are the engine's.** A switched-off pass (`/nlp name`) keeps its number and
   a folder or stub has none. That was measured, not assumed, and both the page
   (`analyzers.ts`) and the server number `analyzer.seq` the same way.
