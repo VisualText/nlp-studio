@@ -310,36 +310,41 @@ async function runChecks(studio: Studio, check: (name: string, ok: boolean, got:
 
 	// The Output tab lists what the run wrote, by name, and opens a file in the editor.
 	studio.panel.showTab("output");
-	const inPanel = [...document.querySelectorAll<HTMLElement>("#results .run-file")].map((b) => b.dataset.output!);
+	const inPanel = [...document.querySelectorAll<HTMLElement>("#results nlp-output button[data-path]")].map((b) => b.dataset.path!);
 	check("the Output tab lists the files the run wrote", inPanel.includes("output.json"), inPanel);
-	document.querySelector<HTMLButtonElement>('#results .run-file[data-output="output.json"]')?.click();
+	document.querySelector<HTMLButtonElement>('#results nlp-output button[data-path="output.json"]')?.click();
 	check("...and clicking one there opens it in the editor", studio.currentOutput === "output.json", studio.currentOutput);
 
 	// What the analyzer wrote is listed like the extension's OUTPUT FILES view, and opens in
 	// the editor rather than being dumped into the panel.
-	const outputs = [...document.querySelectorAll<HTMLElement>("#files button[data-output]")].map((b) => b.dataset.output!);
-	const jsonIcon = document.querySelector('#files button[data-output="output.json"]')
+	const outputs = [...document.querySelectorAll<HTMLElement>("#files nlp-output button[data-path]")].map((b) => b.dataset.path!);
+	const jsonIcon = document.querySelector('#files nlp-output button[data-path="output.json"]')
 		?.closest(".nlp-row")?.querySelector(".nlp-icon.json svg");
 	check("the files the run wrote are listed with their icons", outputs.includes("output.json") && !!jsonIcon, outputs);
 
-	document.querySelector<HTMLButtonElement>('#files button[data-output="output.json"]')?.click();
+	document.querySelector<HTMLButtonElement>('#files nlp-output button[data-path="output.json"]')?.click();
 	const openedOutput = studio.editor.getModel();
 	check("...and clicking one opens it in the editor, read-only",
 		studio.currentOutput === "output.json" && (openedOutput?.getValue().includes("greetings") ?? false)
 		&& studio.editor.getOption(monaco.editor.EditorOption.readOnly),
 		{ output: studio.currentOutput, uri: openedOutput?.uri.toString() });
 
-	const listed = () => [...document.querySelectorAll<HTMLElement>("#files button[data-tree]")].map((b) => b.dataset.tree!);
+	const listed = () => [...document.querySelectorAll<HTMLElement>("#files nlp-trees button[data-path]")].map((b) => b.dataset.path!);
 	check("without Debug, the file list offers only the final parse tree", JSON.stringify(listed()) === '["final.tree"]', listed());
 
 	progress("opening the final parse tree");
-	document.querySelector<HTMLButtonElement>('#files button[data-tree="final.tree"]')?.click();
+	document.querySelector<HTMLButtonElement>('#files nlp-trees button[data-path="final.tree"]')?.click();
 	const tree = await until(() => studio.editor.getModel(), (m) => m?.getLanguageId() === "tree");
 	const greetingLines = tree ? tree.findMatches("_greeting [", false, false, true, null, false) : [];
 	check("the final parse tree opens in the editor, read-only, with the three greetings",
 		studio.currentTree === "final.tree" && studio.currentPath === undefined && greetingLines.length === 3
 		&& studio.editor.getOption(monaco.editor.EditorOption.readOnly),
 		{ tree: studio.currentTree, language: tree?.getLanguageId(), greetings: greetingLines.length });
+	const treeRow = document.querySelector('#files nlp-trees button[data-path="final.tree"]');
+	const outputRow = document.querySelector('#files nlp-output button[data-path="output.json"]');
+	check("...and is marked open in the list, and the output file no longer is",
+		!!treeRow?.classList.contains("on") && !outputRow?.classList.contains("on"),
+		{ tree: treeRow?.className, output: outputRow?.className });
 
 	if (tree && greetingLines.length) {
 		const hover = treeHover(tree, greetingLines[0].range.getStartPosition());

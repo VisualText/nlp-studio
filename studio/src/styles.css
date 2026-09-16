@@ -90,7 +90,6 @@ button.commit { border-color: var(--accent); color: var(--on-ink); font-weight: 
 .commit-files:empty { display: none; }
 .commit-result { margin: 0; min-height: 1.4em; }
 .commit-result a { color: var(--on-ink); font-weight: 600; }
-.files small { color: var(--muted); padding: 0 6px 2px 24px; font-size: 11.5px; }
 
 .editor-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .path { padding: 5px 12px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); background: var(--panel); }
@@ -133,11 +132,9 @@ button.run.busy::before { content: ""; display: inline-block; width: 10px; heigh
 @media (prefers-reduced-motion: reduce) { button.run.busy::before { animation-duration: 3s; } }
 .results-summary[data-status="busy"] { color: var(--on-ink); }
 
-/* The files a run wrote: name and icon, opening in the editor. */
-.run-files { display: flex; flex-direction: column; align-items: flex-start; }
-.run-file { display: flex; align-items: center; gap: 6px; text-align: left; border: 0; border-radius: 4px;
-	background: none; padding: 3px 6px; }
-.run-file:hover { background: var(--on); }
+/* The files a run wrote: the file list's Output, kept narrow in the wide panel. */
+.run-files { max-width: 420px; --nlp-muted: var(--muted); --nlp-hover: var(--on); --nlp-selected: var(--on);
+	--nlp-selected-ink: var(--on-ink); }
 
 .run-problems { display: flex; flex-direction: column; }
 .run-problem { display: flex; gap: 14px; text-align: left; border: 0; border-radius: 4px; background: none; padding: 4px 6px; }

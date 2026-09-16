@@ -1,6 +1,6 @@
 # @visualtext/analyzer-views
 
-This package shows an NLP++ analyzer's pass sequence and knowledge base the same way the
+This package shows an NLP++ analyzer's pass sequence, knowledge base and run results the same way the
 [NLP++ extension for VS Code](https://github.com/VisualText/vscode-nlp) does, on any web page.
 It works with plain DOM code, React or any other framework.
 
@@ -13,7 +13,7 @@ files.
 
 ```js
 import "@visualtext/analyzer-views/style.css";
-import "@visualtext/analyzer-views";          // defines <nlp-sequence> and <nlp-knowledge-base>
+import "@visualtext/analyzer-views";          // defines the four <nlp-*> elements
 
 const sequence = document.createElement("nlp-sequence");
 sequence.files = ["spec/analyzer.seq", "spec/funcs.nlp", "kb/user/hier.kb", "kb/user/colors.dict"];
@@ -27,20 +27,37 @@ kb.addEventListener("nlp-open", (e) => openFile(e.detail.path));
 sidebar.append(sequence, kb);
 ```
 
-Both elements take:
+| Element | Lists | Extension view |
+|---|---|---|
+| `<nlp-sequence>` | The passes in `analyzer.seq`, numbered as the engine numbers them | Analyzer sequence |
+| `<nlp-knowledge-base>` | The `.dict` and `.kbb` files under `kb/` | KB |
+| `<nlp-output>` | The files a run wrote, by name | Output files |
+| `<nlp-trees>` | A run's parse trees: `final.tree`, then the tree after each pass | Output files (trees) |
+
+Every element takes:
 
 | | |
 |---|---|
-| `files` (property) | The analyzer's paths: strings, or `{ path, bytes }` objects to show sizes. |
+| `files` (property) | The paths to list: strings, or `{ path, bytes }` objects to show sizes. `<nlp-trees>` takes `trees` instead. |
 | `selected` (property) | The path that's open now, drawn as selected. |
 | `changed` (property) | Paths with unsaved edits. Each gets a mark, plus a revert button when the element has `revertable`. |
 | `heading` (attribute) | The list's heading. `heading=""` shows no heading. |
 | `revertable` (attribute) | Show a revert button on changed files. |
-| `nlp-open` (event) | A file was clicked. The path is in `event.detail.path`. |
+| `nlp-open` (event) | A file was clicked. The path is in `event.detail.path` (a tree's name for `<nlp-trees>`). |
 | `nlp-revert` (event) | A file's revert button was clicked. |
 
 `<nlp-sequence>` also takes `sequence`, the text of `spec/analyzer.seq`. Its `passes`
 property returns the passes it read from that text.
+
+`<nlp-trees>` takes `trees`, as `{ name, pass, passName, bytes }` objects where `pass` is
+`null` for `final.tree`, and `skipped`, the names of trees too large to keep:
+
+```js
+const trees = document.createElement("nlp-trees");
+trees.trees = [{ name: "final.tree", pass: null, bytes: 42000 }, { name: "ana001.tree", pass: 1, passName: "tokenize" }];
+trees.skipped = ["ana003.tree"];
+trees.addEventListener("nlp-open", (e) => openTree(e.detail.path));
+```
 
 An element with nothing to list hides itself. The rows are ordinary light DOM, so a page can
 style them, query them (`button[data-path]`) and test them.
@@ -65,6 +82,8 @@ match a page's own colors, set these properties on any element around the lists:
 - `shownInKnowledgeBase(path)` says whether a file is listed in the knowledge base.
 - `passTooltip`, `passLabel`, `passIcon`, `fileIcon` and `fileSize` give each row's
   mouse-over, label, icon and size.
+- `outputOrder`, `treeOrder`, `treeLabel`, `treeTitle` and `treeNote` order and describe
+  what a run wrote.
 
 ## Develop
 

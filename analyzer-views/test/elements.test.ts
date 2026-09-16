@@ -99,3 +99,47 @@ describe("<nlp-knowledge-base>", () => {
 		expect(el.hidden).toBe(true);
 	});
 });
+
+describe("<nlp-output>", () => {
+	it("lists what the run wrote by name, with icons and sizes, and says which was clicked", () => {
+		const el = document.createElement("nlp-output");
+		el.files = [{ path: "output.json", bytes: 2048 }, { path: "err.log" }];
+		document.body.append(el);
+		expect(el.querySelector("h3")?.textContent).toBe("Output");
+		expect(paths(el)).toEqual(["err.log", "output.json"]);
+		expect([...el.querySelectorAll(".nlp-icon")].map((i) => i.classList[1])).toEqual(["log", "json"]);
+		expect([...el.querySelectorAll(".nlp-size")].map((n) => n.textContent)).toEqual(["2 KB"]);
+		const opened: string[] = [];
+		el.addEventListener("nlp-open", (e) => opened.push(e.detail.path));
+		el.querySelector<HTMLButtonElement>('button[data-path="output.json"]')!.click();
+		el.selected = "output.json";
+		expect(opened).toEqual(["output.json"]);
+		expect(el.querySelector('button[data-path="output.json"]')!.classList.contains("on")).toBe(true);
+	});
+	it("hides itself when the run wrote nothing", () => {
+		const el = document.createElement("nlp-output");
+		el.files = [];
+		document.body.append(el);
+		expect(el.hidden).toBe(true);
+	});
+});
+
+describe("<nlp-trees>", () => {
+	it("lists the final tree, then the tree after each pass, each with when it was written", () => {
+		const el = document.createElement("nlp-trees");
+		el.trees = [{ name: "ana001.tree", pass: 1, passName: "tokenize", bytes: 3000 }, { name: "final.tree", pass: null }];
+		document.body.append(el);
+		expect(el.querySelector("h3")?.textContent).toBe("Parse trees");
+		expect(paths(el)).toEqual(["final.tree", "ana001.tree"]);
+		expect([...el.querySelectorAll(".nlp-name")].map((n) => n.textContent)).toEqual(["final", "1 tokenize"]);
+		expect([...el.querySelectorAll(".nlp-note")].map((n) => n.textContent)).toEqual(["after the last pass", "after pass 1 · 3 KB"]);
+		expect(el.querySelector(".nlp-name")?.getAttribute("title")).toBe("Open the final parse tree");
+	});
+	it("says which trees were too large to keep", () => {
+		const el = document.createElement("nlp-trees");
+		el.trees = [{ name: "final.tree", pass: null }];
+		el.skipped = ["ana007.tree"];
+		document.body.append(el);
+		expect(el.querySelector(".skipped .nlp-note")?.textContent).toBe("Too large to keep: ana007.tree");
+	});
+});

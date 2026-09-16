@@ -3,22 +3,26 @@
 //
 //   <nlp-sequence>        the passes, as the extension's ANALYZER SEQUENCE view
 //   <nlp-knowledge-base>  the .dict and .kbb files, as its KNOWLEDGE BASE view
+//   <nlp-output>          the files a run wrote, as its OUTPUT FILES view
+//   <nlp-trees>           a run's parse trees: final.tree, and the tree after each pass
 //
-// Give one the analyzer's files (and <nlp-sequence> the text of spec/analyzer.seq); it
-// says when a file is picked:
+// Give one what to list; it says when a file is picked:
 //
 //   const seq = document.createElement("nlp-sequence");
 //   seq.files = ["spec/analyzer.seq", "spec/funcs.nlp", "kb/user/hier.kb"];
 //   seq.sequence = seqText;
 //   seq.addEventListener("nlp-open", (e) => open(e.detail.path));
 //
-// Properties:  files      paths, or { path, bytes } to show sizes
+// Properties:  files      paths, or { path, bytes } to show sizes (all but <nlp-trees>)
+//              sequence   the text of spec/analyzer.seq (<nlp-sequence>)
+//              trees      { name, pass, passName, bytes } and skipped, names too large
+//                         to keep (<nlp-trees>)
 //              selected   the path open now, drawn as selected
 //              changed    paths with unsaved edits, marked, with a revert button when
 //                         the element has the `revertable` attribute
 // Attributes:  heading    the list's heading; heading="" for none
 //              revertable offer a revert button on a changed file
-// Events:      nlp-open   { path }  a file was clicked
+// Events:      nlp-open   { path }  a file was clicked (a tree by its name)
 //              nlp-revert { path }  its revert button was clicked
 //
 // LIGHT DOM, not a shadow root: the rows are ordinary buttons a page can style, test and
@@ -26,6 +30,7 @@
 
 import { type AnalyzerFile, fileSize, shownInKnowledgeBase, toFile } from "./files.js";
 import { type IconName, fileIcon, iconElement, passIcon } from "./icons.js";
+import { type TreeFile, outputOrder, treeLabel, treeNote, treeOrder, treeTitle } from "./runs.js";
 import { type Pass, SEQUENCE_FILE, passes, passLabel, passTooltip } from "./sequence.js";
 
 export interface OpenDetail {
@@ -33,20 +38,23 @@ export interface OpenDetail {
 }
 
 interface Row {
-	label: string;
+	label: string;          // "": no name line, only the note
 	path: string | null;    // null: listed, but nothing to open
 	icon: IconName;
 	title?: string;
 	size?: string;
+	note?: string;          // a line under the name
 	classes?: string[];
 }
+
+// Properties a page may set before the element is defined (see connectedCallback).
+const PROPERTIES = ["files", "sequence", "trees", "skipped", "selected", "changed"];
 
 // Outside a browser there is no HTMLElement; the classes still load, so the package's
 // entry point can be imported for its rules.
 const Base = (globalThis.HTMLElement ?? class {}) as typeof HTMLElement;
 
 abstract class AnalyzerList extends Base {
-	#files: AnalyzerFile[] = [];
 	#selected: string | null = null;
 	#changed = new Set<string>();
 
@@ -54,14 +62,6 @@ abstract class AnalyzerList extends Base {
 
 	protected abstract readonly defaultHeading: string;
 	protected abstract rows(): Row[];
-
-	get files(): AnalyzerFile[] {
-		return this.#files;
-	}
-	set files(files: Iterable<string | AnalyzerFile> | null | undefined) {
-		this.#files = [...(files ?? [])].map(toFile);
-		this.render();
-	}
 
 	get selected(): string | null {
 		return this.#selected;
@@ -82,11 +82,12 @@ abstract class AnalyzerList extends Base {
 	connectedCallback(): void {
 		// A property set before the element was defined sits on the instance and hides the
 		// accessor; take it back through the accessor.
-		for (const key of ["files", "selected", "changed", "sequence"] as const) {
+		const self = this as unknown as Record<string, unknown>;
+		for (const key of PROPERTIES) {
 			if (Object.hasOwn(this, key)) {
-				const value = (this as Record<string, unknown>)[key];
-				delete (this as Record<string, unknown>)[key];
-				(this as Record<string, unknown>)[key] = value;
+				const value = self[key];
+				delete self[key];
+				self[key] = value;
 			}
 		}
 		this.render();
@@ -118,6 +119,17 @@ abstract class AnalyzerList extends Base {
 	private item(row: Row): HTMLLIElement {
 		const li = document.createElement("li");
 		li.className = ["nlp-item", ...(row.classes ?? [])].join(" ");
+		if (row.label) li.append(this.line(row, li));
+		if (row.note) {
+			const note = document.createElement("small");
+			note.className = "nlp-note";
+			note.textContent = row.note;
+			li.append(note);
+		}
+		return li;
+	}
+
+	private line(row: Row, li: HTMLLIElement): HTMLElement {
 		const line = document.createElement("div");
 		line.className = "nlp-row";
 		const name = document.createElement(row.path ? "button" : "span");
@@ -147,8 +159,7 @@ abstract class AnalyzerList extends Base {
 				line.append(revert);
 			}
 		}
-		li.append(line);
-		return li;
+		return line;
 	}
 
 	private emit(type: "nlp-open" | "nlp-revert", path: string): void {
@@ -165,7 +176,23 @@ abstract class AnalyzerList extends Base {
 	}
 }
 
-export class NlpSequence extends AnalyzerList {
+// A list drawn from the analyzer's files, or a run's.
+abstract class FileList extends AnalyzerList {
+	#files: AnalyzerFile[] = [];
+
+	get files(): AnalyzerFile[] {
+		return this.#files;
+	}
+	set files(files: Iterable<string | AnalyzerFile> | null | undefined) {
+		this.#files = [...(files ?? [])].map(toFile);
+		this.filesChanged();
+		this.render();
+	}
+
+	protected filesChanged(): void {}
+}
+
+export class NlpSequence extends FileList {
 	#sequence = "";
 	#passes: Pass[] | null = null;
 
@@ -186,12 +213,8 @@ export class NlpSequence extends AnalyzerList {
 		return this.#passes ??= passes(this.#sequence, this.files.map((f) => f.path));
 	}
 
-	override set files(files: Iterable<string | AnalyzerFile> | null | undefined) {
+	protected override filesChanged(): void {
 		this.#passes = null;
-		super.files = files;
-	}
-	override get files(): AnalyzerFile[] {
-		return super.files;
 	}
 
 	protected rows(): Row[] {
@@ -215,7 +238,7 @@ export class NlpSequence extends AnalyzerList {
 	}
 }
 
-export class NlpKnowledgeBase extends AnalyzerList {
+export class NlpKnowledgeBase extends FileList {
 	protected readonly defaultHeading = "Knowledge base";
 
 	protected rows(): Row[] {
@@ -229,18 +252,81 @@ export class NlpKnowledgeBase extends AnalyzerList {
 	}
 }
 
+export class NlpOutput extends FileList {
+	protected readonly defaultHeading = "Output";
+
+	protected rows(): Row[] {
+		return outputOrder(this.files).map((f) => ({
+			label: f.path,
+			path: f.path,
+			icon: fileIcon(f.path),
+			title: `Open ${f.path}, as the run wrote it`,
+			size: fileSize(f.bytes),
+		}));
+	}
+}
+
+export class NlpTrees extends AnalyzerList {
+	#trees: TreeFile[] = [];
+	#skipped: string[] = [];
+
+	protected readonly defaultHeading = "Parse trees";
+
+	get trees(): TreeFile[] {
+		return this.#trees;
+	}
+	set trees(trees: Iterable<TreeFile> | null | undefined) {
+		this.#trees = treeOrder(trees ?? []);
+		this.render();
+	}
+
+	// Trees the run wrote but did not keep, being too large.
+	get skipped(): string[] {
+		return this.#skipped;
+	}
+	set skipped(names: Iterable<string> | null | undefined) {
+		this.#skipped = [...(names ?? [])];
+		this.render();
+	}
+
+	protected rows(): Row[] {
+		const rows: Row[] = this.#trees.map((t) => ({
+			label: treeLabel(t),
+			path: t.name,
+			icon: "tree",
+			title: `Open the ${treeTitle(t)}`,
+			note: treeNote(t),
+		}));
+		if (this.#skipped.length) {
+			rows.push({ label: "", path: null, icon: "blank", note: `Too large to keep: ${this.#skipped.join(", ")}`,
+				classes: ["skipped"] });
+		}
+		return rows;
+	}
+}
+
+const ELEMENTS: [string, CustomElementConstructor][] = [
+	["nlp-sequence", NlpSequence],
+	["nlp-knowledge-base", NlpKnowledgeBase],
+	["nlp-output", NlpOutput],
+	["nlp-trees", NlpTrees],
+];
+
 // Registers the elements, once. The package's entry point calls it; a page that loads
 // the classes some other way can call it itself.
 export function defineAnalyzerViews(registry: CustomElementRegistry | undefined = globalThis.customElements): void {
 	if (!registry) return;
-	if (!registry.get("nlp-sequence")) registry.define("nlp-sequence", NlpSequence);
-	if (!registry.get("nlp-knowledge-base")) registry.define("nlp-knowledge-base", NlpKnowledgeBase);
+	for (const [name, element] of ELEMENTS) {
+		if (!registry.get(name)) registry.define(name, element);
+	}
 }
 
 declare global {
 	interface HTMLElementTagNameMap {
 		"nlp-sequence": NlpSequence;
 		"nlp-knowledge-base": NlpKnowledgeBase;
+		"nlp-output": NlpOutput;
+		"nlp-trees": NlpTrees;
 	}
 	interface HTMLElementEventMap {
 		"nlp-open": CustomEvent<OpenDetail>;

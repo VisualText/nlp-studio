@@ -21,7 +21,8 @@ import { languageFor } from "./lsp/convert";
 
 import { type AnalyzerEntry, fileUri, loadFiles, loadIndex, pathOf } from "./analyzers";
 import {
-	type IconName, type NlpKnowledgeBase, type NlpSequence, type Pass, fileIcon, iconElement, passes,
+	type IconName, type NlpKnowledgeBase, type NlpSequence, type Pass, type TreeFile as ListedTree,
+	fileSize, iconElement, passes, treeTitle,
 } from "@visualtext/analyzer-views";
 import {
 	type Account, type CommitResult, type FoundAnalyzer, type RecentAnalyzer, type RepoAnalyzers, type Repository,
@@ -29,7 +30,9 @@ import {
 } from "./github/api";
 import { DraftStore } from "./drafts";
 import { safeFolder, zipAnalyzer } from "./zipfiles";
-import { type RunResult, type RunTrees, type TreeFile, fetchTree, runAnalyzer, serverHealth } from "./run/api";
+import {
+	type RunResult, type RunTrees, type TreeFile, fetchTree, outputFiles, runAnalyzer, serverHealth,
+} from "./run/api";
 import { RunPanel } from "./run/panel";
 import { type TreeContext, attachTreeContext, installTreeFeatures, treeDefinition } from "./run/treeview";
 import { progress, selfTest } from "./selftest";
@@ -65,14 +68,9 @@ function rememberSetting(key: string, value: string): void {
 	}
 }
 
-function sizeOf(bytes: number): string {
-	if (bytes < 1024) return `${bytes} B`;
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-	return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function treeTitle(file: TreeFile): string {
-	return file.pass === null ? "final parse tree" : `parse tree after pass ${file.pass}${file.passName ? ` (${file.passName})` : ""}`;
+// A tree as the run server describes it, for <nlp-trees>.
+function listedTree(file: TreeFile): ListedTree {
+	return { name: file.name, pass: file.pass, passName: file.passName, bytes: file.size };
 }
 
 function darkTheme(): boolean {
@@ -305,7 +303,7 @@ export class Studio {
 		let model = this.treeModels.get(name);
 		if (!model) {
 			const before = byId("status").textContent ?? "";
-			this.say(`Loading the ${treeTitle(file)} (${sizeOf(file.size)})…`);
+			this.say(`Loading the ${treeTitle(file)} (${fileSize(file.size)})…`);
 			let text: string;
 			try {
 				text = await fetchTree(run.trees.run, name);
@@ -349,15 +347,14 @@ export class Studio {
 	}
 
 	private markOpen(): void {
-		const on = (el: HTMLElement) => (el.dataset.path
-			? el.dataset.path === this.currentPath
-			: el.dataset.tree
-				? el.dataset.tree === this.currentTree
-				: el.dataset.output === this.currentOutput);
 		for (const list of this.sharedLists()) list.selected = this.currentPath;
-		for (const el of byId("files").querySelectorAll<HTMLElement>(
-			".studio-list button[data-path], button[data-tree], button[data-output]")) {
-			el.classList.toggle("on", on(el));
+		const files = byId("files");
+		const output = files.querySelector("nlp-output");
+		if (output) output.selected = this.currentOutput;
+		const trees = files.querySelector("nlp-trees");
+		if (trees) trees.selected = this.currentTree;
+		for (const el of files.querySelectorAll<HTMLElement>(".studio-list button[data-path]")) {
+			el.classList.toggle("on", el.dataset.path === this.currentPath);
 		}
 	}
 
@@ -859,53 +856,16 @@ export class Studio {
 			const list = section("Input");
 			for (const f of input) item(list, f.slice(6), f, { icon: "file", title: f });
 		}
-		// What the run wrote, as the extension's OUTPUT FILES view lists it: the file's name
-		// with its icon, opening read-only in the editor.
-		const wrote = Object.keys(this.lastRun?.output ?? {}).sort();
-		if (wrote.length) {
-			const list = section("Output");
-			for (const name of wrote) {
-				const li = document.createElement("li");
-				li.className = "nlp-item";
-				const row = document.createElement("div");
-				row.className = "nlp-row";
-				const open = button(name, () => this.openOutput(name));
-				open.className = "nlp-name";
-				open.dataset.output = name;
-				open.title = `Open ${name}, as the run wrote it`;
-				row.append(iconElement(fileIcon(name)), open);
-				li.append(row);
-				list.append(li);
-			}
-		}
-		const trees = this.lastRun?.trees;
-		if (trees) {
-			const list = section("Parse trees");
-			// The final tree first, then the tree after each pass, in order.
-			const files = [...trees.files].sort((a, b) => (a.pass ?? -1) - (b.pass ?? -1));
-			for (const f of files) {
-				const li = document.createElement("li");
-				li.className = "nlp-item";
-				const row = document.createElement("div");
-				row.className = "nlp-row";
-				const open = button(f.pass === null ? "final" : `${f.pass} ${f.passName ?? ""}`, () => void this.openTree(f.name));
-				open.className = "nlp-name";
-				open.dataset.tree = f.name;
-				open.title = `Open the ${treeTitle(f)}`;
-				row.append(iconElement("tree"), open);
-				const note = document.createElement("small");
-				note.textContent = `${f.pass === null ? "after the last pass" : `after pass ${f.pass}`} · ${sizeOf(f.size)}`;
-				li.append(row, note);
-				list.append(li);
-			}
-			if (trees.skipped.length) {
-				const li = document.createElement("li");
-				const note = document.createElement("small");
-				note.textContent = `Too large to keep: ${trees.skipped.join(", ")}`;
-				li.append(note);
-				list.append(li);
-			}
-		}
+		// What the run wrote, and its parse trees, as the extension's OUTPUT FILES view lists
+		// them; each opens read-only in the editor.
+		const output = document.createElement("nlp-output");
+		output.files = outputFiles(this.lastRun);
+		output.addEventListener("nlp-open", (e) => this.openOutput(e.detail.path));
+		const trees = document.createElement("nlp-trees");
+		trees.trees = this.lastRun?.trees?.files.map(listedTree);
+		trees.skipped = this.lastRun?.trees?.skipped;
+		trees.addEventListener("nlp-open", (e) => void this.openTree(e.detail.path));
+		nav.append(output, trees);
 	}
 
 	private showProblems(): void {
