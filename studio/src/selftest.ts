@@ -308,6 +308,13 @@ async function runChecks(studio: Studio, check: (name: string, ok: boolean, got:
 	check("the run server runs the sample to its output", result.status === "ok" && greetings === 3,
 		{ status: result.status, message: result.message, greetings });
 
+	// The Output tab lists what the run wrote, by name, and opens a file in the editor.
+	studio.panel.showTab("output");
+	const inPanel = [...document.querySelectorAll<HTMLElement>("#results .run-file")].map((b) => b.dataset.output!);
+	check("the Output tab lists the files the run wrote", inPanel.includes("output.json"), inPanel);
+	document.querySelector<HTMLButtonElement>('#results .run-file[data-output="output.json"]')?.click();
+	check("...and clicking one there opens it in the editor", studio.currentOutput === "output.json", studio.currentOutput);
+
 	// What the analyzer wrote is listed like the extension's OUTPUT FILES view, and opens in
 	// the editor rather than being dumped into the panel.
 	const outputs = [...document.querySelectorAll<HTMLElement>("#files button[data-output]")].map((b) => b.dataset.output!);

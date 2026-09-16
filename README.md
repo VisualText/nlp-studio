@@ -36,9 +36,10 @@ npm run server               # the run server, on http://127.0.0.1:8765
 npm run dev                  # in a second terminal: http://localhost:5173
 ```
 
-Edit an analyzer and press **Run** (F5) to run it on the input file. Its problems and log appear
-under the editor; the files it wrote are listed under **Output** and its parse tree under
-**Parse trees**, each with the icon the VS Code extension gives it. Click one and it fills the
+Edit an analyzer and press **Run** (F5) to run it on the input file. Under the editor, **Output**
+lists the files it wrote, with **Problems** and **Log** beside it; the same files are listed in
+the file list under **Output**, and its parse tree under **Parse trees**, each with the icon the
+VS Code extension gives it. Click one and it fills the
 editor, read-only — a tree coloured as the extension colours trees, node names green, rewrites
 bold, offsets blue. Hover over a node to see the text it covers; go to
 definition (F12) opens the rule that built it, or selects a token's text in the input. Tick

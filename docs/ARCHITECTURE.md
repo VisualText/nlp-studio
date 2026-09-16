@@ -103,8 +103,13 @@ files the analyzer wrote, problems, and the engine's log. Its parse trees open i
 - **What a run wrote is a file list, not a dump.** As in the extension's OUTPUT FILES view, the
   files the analyzer wrote are listed by name with their icons under **Output**, and open
   read-only in the editor (`languageFor` gives each its colouring). Their text comes back with
-  the result, so opening one asks the server for nothing. The results panel keeps only what is
-  not a file: problems, and the engine's log.
+  the result, so opening one asks the server for nothing. The results panel's **Output** tab
+  lists the same files the same way — that is where a run's results are read, and a tab that
+  says "the analyzer wrote no output files" beats a section that is simply absent — and both
+  lists open a file in the editor rather than dumping its text.
+- **A run says it is running.** The Run button turns and reads "Running…", and the panel opens
+  at once with what is running, rather than leaving the last run's results on screen until the
+  new one lands.
 - **Trees open in the editor, one at a time.** Trees get very large, so they are not sent with
   the result. The server moves a run's trees aside (`trees.py`: for the person who ran it, for
   30 minutes, the newest 20 runs and 256 MB) and the page lists them; opening one fetches it

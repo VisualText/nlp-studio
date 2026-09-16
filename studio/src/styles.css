@@ -171,6 +171,37 @@ button.commit { border-color: var(--accent); color: var(--on-ink); font-weight: 
 .check { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; cursor: pointer; user-select: none; }
 .check input { margin: 0; }
 
+/* While a run is going: the button turns, and the panel says what is running. */
+button.run.busy { opacity: 1; }
+button.run.busy::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 7px;
+	vertical-align: -1px; border: 2px solid var(--accent-ink); border-top-color: transparent; border-radius: 50%;
+	animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { button.run.busy::before { animation-duration: 3s; } }
+.results-summary[data-status="busy"] { color: var(--on-ink); }
+
+/* The files a run wrote: name and icon, opening in the editor. */
+.run-files { display: flex; flex-direction: column; align-items: flex-start; }
+.run-file { display: flex; align-items: center; gap: 6px; text-align: left; border: 0; border-radius: 4px;
+	background: none; padding: 3px 6px; }
+.run-file:hover { background: var(--on); }
+.run-file .file-icon { flex: none; width: 14px; height: 13px; display: inline-flex; align-items: center; justify-content: center; }
+.run-file .file-icon svg { width: 100%; height: 100%; }
+.run-file .file-icon.dict { color: #2e3192; }
+.run-file .file-icon.kbb { color: #4759d6; }
+.run-file .file-icon.json { color: #2e3192; }
+.run-file .file-icon.file, .run-file .file-icon.tree, .run-file .file-icon.log { color: #424242; }
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) .run-file .file-icon.dict, :root:not([data-theme="light"]) .run-file .file-icon.json { color: #00aeef; }
+	:root:not([data-theme="light"]) .run-file .file-icon.kbb { color: #ffe680; }
+	:root:not([data-theme="light"]) .run-file .file-icon.file, :root:not([data-theme="light"]) .run-file .file-icon.tree { color: #c5c5c5; }
+	:root:not([data-theme="light"]) .run-file .file-icon.log { color: #e6e6e6; }
+}
+:root[data-theme="dark"] .run-file .file-icon.dict, :root[data-theme="dark"] .run-file .file-icon.json { color: #00aeef; }
+:root[data-theme="dark"] .run-file .file-icon.kbb { color: #ffe680; }
+:root[data-theme="dark"] .run-file .file-icon.file, :root[data-theme="dark"] .run-file .file-icon.tree { color: #c5c5c5; }
+:root[data-theme="dark"] .run-file .file-icon.log { color: #e6e6e6; }
+
 .run-problems { display: flex; flex-direction: column; }
 .run-problem { display: flex; gap: 14px; text-align: left; border: 0; border-radius: 4px; background: none; padding: 4px 6px; }
 .run-problem:hover:not(:disabled) { background: var(--on); }
