@@ -1,16 +1,19 @@
-// The results of a run: its problems, and the engine's log.
+// The results of a run: what it wrote, its problems, and the engine's log.
 //
-// DOM and data only -- no Monaco. Neither the files the analyzer wrote nor its parse trees
-// are shown here: both are listed in the file list and open in the editor, as they do in the
-// extension's OUTPUT FILES view. This panel keeps what is not a file.
+// DOM and data only -- no Monaco. The Output tab lists the files the analyzer wrote, by name
+// with their icons, as the extension's OUTPUT FILES view does; clicking one opens it in the
+// editor through PanelHooks rather than dumping its text here. The file list holds the same
+// files, and the parse trees, and opens them the same way.
+import { fileIcon, iconElement } from "../icons";
 import type { RunProblem, RunResult, RunStatus } from "./api";
 
 export interface PanelHooks {
 	open(path: string, at?: { lineNumber: number; column: number }): void;
 	openTree(name: string): void;
+	openOutput(name: string): void;
 }
 
-export type Tab = "problems" | "log";
+export type Tab = "output" | "problems" | "log";
 
 const HEADLINE: Record<RunStatus, string> = {
 	ok: "Ran", failed: "Did not build", timeout: "Timed out", crashed: "Engine stopped",
@@ -47,6 +50,17 @@ export class RunPanel {
 		this.section.hidden = true;
 	}
 
+	// A run has started: the panel says so at once, rather than showing the last run's results
+	// until this one comes back.
+	busy(what: string): void {
+		this.result = undefined;
+		this.section.hidden = false;
+		this.summary.textContent = what;
+		this.summary.dataset.status = "busy";
+		this.treeButton.hidden = true;
+		this.body.replaceChildren(make("p", "note", "Running…"));
+	}
+
 	show(result: RunResult): void {
 		this.result = result;
 		this.section.hidden = false;
@@ -61,7 +75,10 @@ export class RunPanel {
 		const problems = result.problems?.length ?? 0;
 		const problemsTab = this.tabs.find((t) => t.dataset.tab === "problems");
 		if (problemsTab) problemsTab.textContent = problems ? `Problems (${problems})` : "Problems";
-		this.showTab("problems");
+		const wrote = Object.keys(result.output ?? {}).length;
+		const outputTab = this.tabs.find((t) => t.dataset.tab === "output");
+		if (outputTab) outputTab.textContent = wrote ? `Output (${wrote})` : "Output";
+		this.showTab(problems ? "problems" : "output");
 	}
 
 	showTab(tab: Tab): void {
@@ -70,8 +87,30 @@ export class RunPanel {
 		const result = this.result;
 		if (!result) return;
 		if (result.status !== "ok") this.body.append(make("p", "note bad", result.message));
-		if (tab === "problems") this.renderProblems(result, result.problems ?? []);
+		if (tab === "output") this.renderOutput(result);
+		else if (tab === "problems") this.renderProblems(result, result.problems ?? []);
 		else this.renderLog(result.log ?? []);
+	}
+
+	// The files the run wrote, by name: click one to open it in the editor.
+	private renderOutput(result: RunResult): void {
+		const names = Object.keys(result.output ?? {}).sort();
+		if (!names.length) {
+			this.body.append(make("p", "note", result.status === "ok"
+				? "The analyzer wrote no output files."
+				: "Nothing was written: the run did not finish."));
+			return;
+		}
+		const list = make("div", "run-files");
+		for (const name of names) {
+			const row = make("button", "run-file");
+			row.title = `Open ${name} in the editor`;
+			row.dataset.output = name;
+			row.append(iconElement(fileIcon(name)), make("span", "what mono", name));
+			row.addEventListener("click", () => this.hooks.openOutput(name));
+			list.append(row);
+		}
+		this.body.append(list);
 	}
 
 	private renderProblems(result: RunResult, problems: RunProblem[]): void {

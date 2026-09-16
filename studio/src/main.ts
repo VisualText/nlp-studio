@@ -147,6 +147,7 @@ export class Studio {
 		this.panel = new RunPanel(byId("results"), {
 			open: (path, at) => this.openPath(path, at),
 			openTree: (name) => void this.openTree(name),
+			openOutput: (name) => this.openOutput(name),
 		});
 		byId("run").addEventListener("click", () => void this.run());
 		const debug = byId<HTMLInputElement>("debug");
@@ -711,6 +712,7 @@ export class Studio {
 		const status = byId("status");
 		const before = status.textContent;
 		status.textContent = `Running ${analyzer.title} on ${inputPath}…`;
+		this.panel.busy(`Running ${analyzer.title} on ${inputPath.split("/").pop()}…`);
 		const files: Record<string, string> = {};
 		for (const [path, model] of this.models) {
 			if (!path.startsWith("input/")) files[path] = model.getValue();
@@ -780,7 +782,11 @@ export class Studio {
 	private showRunTarget(): void {
 		const name = this.inputPath?.split("/").pop();
 		byId("run-on").textContent = name ? `on ${name}` : "no input file";
-		byId<HTMLButtonElement>("run").disabled = this.running || !name;
+		// While a run is going the button says so and turns, since a run can take seconds.
+		const run = byId<HTMLButtonElement>("run");
+		run.disabled = this.running || !name;
+		run.textContent = this.running ? "Running…" : "Run";
+		run.classList.toggle("busy", this.running);
 	}
 
 	// ---- The file list ---------------------------------------------------------------
