@@ -71,7 +71,8 @@ button.run { background: var(--accent); border-color: var(--accent); color: var(
 .files .file-icon.folder { color: #656565; }
 .files .file-icon.dict { color: #2e3192; }
 .files .file-icon.kbb { color: #4759d6; }
-.files .file-icon.file, .files .file-icon.tree { color: #424242; }
+.files .file-icon.file, .files .file-icon.tree, .files .file-icon.log { color: #424242; }
+.files .file-icon.json { color: #2e3192; }
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme="light"]) .files .file-icon.dna, :root:not([data-theme="light"]) .files .file-icon.dnar { color: #edec81; }
 	:root:not([data-theme="light"]) .files .file-icon.dot { color: #b5aaff; }
@@ -79,6 +80,8 @@ button.run { background: var(--accent); border-color: var(--accent); color: var(
 	:root:not([data-theme="light"]) .files .file-icon.dict { color: #00aeef; }
 	:root:not([data-theme="light"]) .files .file-icon.kbb { color: #ffe680; }
 	:root:not([data-theme="light"]) .files .file-icon.file, :root:not([data-theme="light"]) .files .file-icon.tree { color: #c5c5c5; }
+	:root:not([data-theme="light"]) .files .file-icon.log { color: #e6e6e6; }
+	:root:not([data-theme="light"]) .files .file-icon.json { color: #00aeef; }
 }
 :root[data-theme="dark"] .files .file-icon.dna, :root[data-theme="dark"] .files .file-icon.dnar { color: #edec81; }
 :root[data-theme="dark"] .files .file-icon.dot { color: #b5aaff; }
@@ -86,6 +89,8 @@ button.run { background: var(--accent); border-color: var(--accent); color: var(
 :root[data-theme="dark"] .files .file-icon.dict { color: #00aeef; }
 :root[data-theme="dark"] .files .file-icon.kbb { color: #ffe680; }
 :root[data-theme="dark"] .files .file-icon.file, :root[data-theme="dark"] .files .file-icon.tree { color: #c5c5c5; }
+:root[data-theme="dark"] .files .file-icon.log { color: #e6e6e6; }
+:root[data-theme="dark"] .files .file-icon.json { color: #00aeef; }
 /* The name fills the row; the icon before it is sized by its own rule below. */
 .files .file-row > button:not(.revert), .files .file-row > span:not(.file-icon) { flex: 1; min-width: 0; text-align: left; border: 0;
 	background: none; padding: 3px 6px; border-radius: 5px; font-family: ui-monospace, "Cascadia Code", Consolas, monospace;

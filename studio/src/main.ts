@@ -16,6 +16,7 @@ import { monaco } from "./monaco";
 import { installHighlighting, THEMES } from "./highlight";
 import { NlpLanguageClient, installLanguageFeatures } from "./lsp/client";
 import { languageFor } from "./lsp/convert";
+
 import {
 	type AnalyzerEntry, type Pass, fileUri, loadFiles, loadIndex, passes, pathOf, shownInKnowledgeBase,
 } from "./analyzers";
@@ -91,8 +92,9 @@ export class Studio {
 	analyzers: AnalyzerEntry[] = [];
 	current: AnalyzerEntry | undefined;
 	currentPath: string | undefined;
-	// The parse tree in the editor, when one is: currentPath is then undefined.
+	// A parse tree or an output file in the editor, when one is: currentPath is then undefined.
 	currentTree: string | undefined;
+	currentOutput: string | undefined;
 	// The input a run reads: the input file opened last, or the analyzer's first.
 	inputPath: string | undefined;
 	passList: Pass[] = [];
@@ -109,10 +111,12 @@ export class Studio {
 	private running = false;
 	// The last run's trees, and what its tree documents need to point back into the analyzer.
 	// Kept apart from the analyzer's files: never a draft, never run, committed or zipped.
-	private lastRun: { trees: RunTrees; context: TreeContext } | undefined;
+	private lastRun: { id: string; trees: RunTrees | null; output: Record<string, string>; context: TreeContext } | undefined;
 	private readonly treeModels = new Map<string, monaco.editor.ITextModel>();
+	private readonly outputModels = new Map<string, monaco.editor.ITextModel>();
 	private lastPath: string | undefined;
 	private treeRequest = 0;
+	private runCount = 0;
 
 	constructor(readonly client: NlpLanguageClient) {
 		this.editor = monaco.editor.create(byId("editor"), {
@@ -190,7 +194,7 @@ export class Studio {
 		if (!entry) return;
 		const texts = await loadFiles(entry);
 		this.flushDrafts();
-		this.forgetTrees();
+		this.forgetRunFiles();
 		for (const model of this.models.values()) model.dispose();
 		this.models.clear();
 		this.originals.clear();
@@ -237,6 +241,7 @@ export class Studio {
 		this.currentPath = path;
 		this.lastPath = path;
 		this.currentTree = undefined;
+		this.currentOutput = undefined;
 		if (path.startsWith("input/")) {
 			this.inputPath = path;
 			this.showRunTarget();
@@ -260,15 +265,39 @@ export class Studio {
 
 	// The last run's trees, as listed in the file list.
 	get runTrees(): RunTrees | undefined {
-		return this.lastRun?.trees;
+		return this.lastRun?.trees ?? undefined;
+	}
+
+	// Open one of the last run's output files, read-only, in the editor. Its text came back
+	// with the run, so this needs nothing from the server.
+	openOutput(name: string): boolean {
+		const run = this.lastRun;
+		const text = run?.output[name];
+		if (!run || text === undefined || !this.current) return false;
+		this.treeRequest++; // a tree still loading must not take the editor from this
+		let model = this.outputModels.get(name);
+		if (!model) {
+			model = monaco.editor.createModel(text, languageFor(name), monaco.Uri.parse(`nlp-output:/${run.id}/${name}`));
+			this.outputModels.set(name, model);
+		}
+		this.editor.setModel(model);
+		this.editor.updateOptions({ readOnly: true });
+		this.currentPath = undefined;
+		this.currentTree = undefined;
+		this.currentOutput = name;
+		byId("path").textContent = `${this.current.title} / output / ${name}`;
+		this.markOpen();
+		this.editor.focus();
+		this.showProblems();
+		return true;
 	}
 
 	// Open one of the last run's trees, read-only, in the editor. Fetched the first time it is
 	// opened, then kept until the next run. False, and said in the header, if it could not be.
 	async openTree(name: string): Promise<boolean> {
 		const run = this.lastRun;
-		const file = run?.trees.files.find((f) => f.name === name);
-		if (!run || !file || !this.current) return false;
+		const file = run?.trees?.files.find((f) => f.name === name);
+		if (!run?.trees || !file || !this.current) return false;
 		const request = ++this.treeRequest;
 		let model = this.treeModels.get(name);
 		if (!model) {
@@ -294,6 +323,7 @@ export class Studio {
 		this.editor.setModel(model);
 		this.editor.updateOptions({ readOnly: true });
 		this.currentPath = undefined;
+		this.currentOutput = undefined;
 		this.currentTree = name;
 		byId("path").textContent = `${this.current.title} / ${treeTitle(file)} · ${name}`;
 		this.markOpen();
@@ -302,20 +332,27 @@ export class Studio {
 		return true;
 	}
 
-	// Let go of the last run's trees; the editor goes back to a file if it was showing one.
-	private forgetTrees(): void {
+	// Let go of the last run's files; the editor goes back to a file if it was showing one.
+	private forgetRunFiles(): void {
 		this.treeRequest++;
-		const showing = this.currentTree !== undefined;
+		const showing = this.currentTree !== undefined || this.currentOutput !== undefined;
 		this.lastRun = undefined;
 		this.currentTree = undefined;
+		this.currentOutput = undefined;
 		if (showing) this.editor.setModel(null);
-		for (const model of this.treeModels.values()) model.dispose();
+		for (const model of [...this.treeModels.values(), ...this.outputModels.values()]) model.dispose();
 		this.treeModels.clear();
+		this.outputModels.clear();
 	}
 
 	private markOpen(): void {
-		for (const el of byId("files").querySelectorAll<HTMLElement>("button[data-path], button[data-tree]")) {
-			el.classList.toggle("on", el.dataset.path ? el.dataset.path === this.currentPath : el.dataset.tree === this.currentTree);
+		const on = (el: HTMLElement) => (el.dataset.path
+			? el.dataset.path === this.currentPath
+			: el.dataset.tree
+				? el.dataset.tree === this.currentTree
+				: el.dataset.output === this.currentOutput);
+		for (const el of byId("files").querySelectorAll<HTMLElement>("button[data-path], button[data-tree], button[data-output]")) {
+			el.classList.toggle("on", on(el));
 		}
 	}
 
@@ -684,7 +721,7 @@ export class Studio {
 			const result = await runAnalyzer(files, text, { develop: byId<HTMLInputElement>("debug").checked });
 			if (this.current === analyzer) {
 				this.markRunProblems(result);
-				this.showTrees(result, {
+				this.showRunFiles(result, {
 					analyzer: analyzer.name,
 					inputPath,
 					text,
@@ -700,21 +737,23 @@ export class Studio {
 		}
 	}
 
-	// A run's trees replace the last run's. A tree open in the editor is opened again from this
-	// run, if it wrote one of that name; otherwise the editor goes back to the file it had.
-	private showTrees(result: RunResult, context: TreeContext): void {
-		const shown = this.currentTree;
-		this.forgetTrees();
-		if (result.trees?.files.length) this.lastRun = { trees: result.trees, context };
+	// A run's files replace the last run's. Whatever was open in the editor -- a tree, an output
+	// file -- opens again from this run when it wrote one of that name; otherwise the editor
+	// goes back to the analyzer file it had.
+	private showRunFiles(result: RunResult, context: TreeContext): void {
+		const tree = this.currentTree;
+		const output = this.currentOutput;
+		this.forgetRunFiles();
+		const files = result.output ?? {};
+		if (result.trees?.files.length || Object.keys(files).length) {
+			this.lastRun = { id: result.trees?.run ?? `run${++this.runCount}`, trees: result.trees ?? null, output: files, context };
+		}
 		this.renderFiles();
 		this.showChanges();
-		if (shown === undefined) {
-			this.markOpen();
-		} else if (this.lastRun?.trees.files.some((f) => f.name === shown)) {
-			void this.openTree(shown);
-		} else {
-			this.openPath(this.lastPath ?? "spec/analyzer.seq");
-		}
+		if (tree !== undefined && this.lastRun?.trees?.files.some((f) => f.name === tree)) void this.openTree(tree);
+		else if (output !== undefined && this.lastRun?.output[output] !== undefined) this.openOutput(output);
+		else if (tree === undefined && output === undefined) this.markOpen();
+		else this.openPath(this.lastPath ?? "spec/analyzer.seq");
 	}
 
 	private markRunProblems(result: RunResult): void {
@@ -812,6 +851,23 @@ export class Studio {
 		if (input.length) {
 			const list = section("Input");
 			for (const f of input) item(list, f.slice(6), f, { icon: "file", title: f });
+		}
+		// What the run wrote, as the extension's OUTPUT FILES view lists it: the file's name
+		// with its icon, opening read-only in the editor.
+		const wrote = Object.keys(this.lastRun?.output ?? {}).sort();
+		if (wrote.length) {
+			const list = section("Output");
+			for (const name of wrote) {
+				const li = document.createElement("li");
+				const row = document.createElement("div");
+				row.className = "file-row";
+				const open = button(name, () => this.openOutput(name));
+				open.dataset.output = name;
+				open.title = `Open ${name}, as the run wrote it`;
+				row.append(iconElement(fileIcon(name)), open);
+				li.append(row);
+				list.append(li);
+			}
 		}
 		const trees = this.lastRun?.trees;
 		if (trees) {
