@@ -21,9 +21,42 @@ export interface RunResult {
 	ms?: number;
 	engine?: string | null;
 	output?: Record<string, string>;  // files the analyzer wrote into output/
-	tree?: string | null;             // output/final.tree
+	tree?: string | null;             // output/final.tree, when small enough to send inline
+	trees?: RunTrees | null;          // the run's trees, kept by the server to open one at a time
 	problems?: RunProblem[];
 	log?: string[];
+}
+
+export interface TreeFile {
+	name: string;                     // final.tree, or ana001.tree ... after each pass (Debug)
+	size: number;                     // bytes
+	pass: number | null;              // the pass it was written after; null for final.tree
+	passName: string | null;
+	file: string | null;              // that pass's spec/ file, if it has one
+}
+
+export interface RunTrees {
+	run: string;                      // the id to ask for them by
+	files: TreeFile[];
+	skipped: string[];                // trees too large to keep
+}
+
+// One of a run's trees, as text. It is kept on the server for a while after the run.
+export async function fetchTree(run: string, name: string, base = "api"): Promise<string> {
+	let res: Response;
+	try {
+		res = await fetch(`${base}/run/tree?${new URLSearchParams({ run, name })}`, { cache: "no-store" });
+	} catch {
+		throw new Error("The run server did not answer.");
+	}
+	if (res.ok) return res.text();
+	let message = `HTTP ${res.status}`;
+	try {
+		message = ((await res.json()) as { message?: string }).message ?? message;
+	} catch {
+		// Not JSON.
+	}
+	throw new Error(message);
 }
 
 export interface ServerHealth {
@@ -47,13 +80,15 @@ export async function serverHealth(base = "api"): Promise<ServerHealth | null> {
 	}
 }
 
-export async function runAnalyzer(files: Record<string, string>, text: string, base = "api"): Promise<RunResult> {
+// `develop` is the Debug checkbox: the engine also writes the tree after every pass.
+export async function runAnalyzer(files: Record<string, string>, text: string,
+	options: { develop?: boolean } = {}, base = "api"): Promise<RunResult> {
 	let res: Response;
 	try {
 		res = await fetch(`${base}/run`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ files, text }),
+			body: JSON.stringify({ files, text, develop: options.develop === true }),
 		});
 	} catch {
 		return { status: "unavailable", message: NO_SERVER };

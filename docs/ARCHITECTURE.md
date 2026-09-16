@@ -77,14 +77,14 @@ The first slice of phase 2 is the editor, in [../studio/](../studio/), and it ne
 - **Checked in a real browser.** `npm run selftest` opens the build headless and the page
   checks itself through the editor: go to definition across passes, hover, completion,
   outline, a misspelled call flagged with its fix, and switching analyzers — and, with a
-  run server, running the sample, clicking through its parse tree, and a run error landing
-  on its line.
+  run server, running the sample, opening its parse trees and going from a node to its rule
+  and its text, and a run error landing on its line.
 
 ### Running analyzers (implemented)
 
 **Run** sends the analyzer as it stands in the editor, with the text of one input file, to
 the run server (`studio/server/app.py`), and shows what comes back under the editor: the
-files the analyzer wrote, the final parse tree, problems, and the engine's log.
+files the analyzer wrote, problems, and the engine's log. Its parse trees open in the editor.
 
 - **Python, not Node.** The target design above hosts the engine in-process through
   `nlpplus`. The run server uses the NLPPlus Python package (pinned, 2.2.37) instead — the
@@ -98,9 +98,15 @@ files the analyzer wrote, the final parse tree, problems, and the engine's log.
   second to start.
 - **Results are the files the engine writes.** `output/final.tree` is the parse tree;
   `logs/make_ana.log` and `output/err.log` hold build and run errors as
-  `<pass> <line> [message]`; the rest of `output/` is the analyzer's own. Each tree node
-  carries the pass and rule line that built it, so the panel links a node to its rule, a
-  problem to its line, and marks that line in the editor.
+  `<pass> <line> [message]`; the rest of `output/` is the analyzer's own. A problem links to
+  its line, which is marked in the editor.
+- **Trees open in the editor, one at a time.** Trees get very large, so they are not sent with
+  the result. The server moves a run's trees aside (`trees.py`: for the person who ran it, for
+  30 minutes, the newest 20 runs and 256 MB) and the page lists them; opening one fetches it
+  (`GET /api/run/tree`) into a read-only editor document in the `tree` language. **Debug**
+  runs the engine in its develop mode, which also writes `output/ana###.tree` after every
+  pass. Each tree node carries the pass and rule line that built it, so hover shows a node's
+  text and go to definition opens its rule (`run/treeview.ts`).
 - **Pass numbers are the engine's.** A switched-off pass (`/nlp name`) keeps its number and
   a folder or stub has none. That was measured, not assumed, and both the page
   (`analyzers.ts`) and the server number `analyzer.seq` the same way.

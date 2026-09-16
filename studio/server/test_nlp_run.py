@@ -16,6 +16,7 @@ from pathlib import Path
 
 import nlp_run
 from nlp_run import RunError
+from trees import TreeStore
 
 SAMPLE = Path(__file__).resolve().parents[1] / "samples" / "hello-studio"
 TEXT = "hello world. Hi there, and hey everyone!\n"
@@ -140,6 +141,32 @@ class Runs(unittest.TestCase):
         self.assertEqual(json.loads(result["output"]["output.json"]), {"greetings": 3})
         self.assertEqual([p for p in result["problems"] if p["message"].startswith("openfile(")], [])
 
+    def test_debug_keeps_a_tree_after_every_pass_and_the_final_tree(self):
+        import tempfile
+        store = TreeStore(tempfile.mkdtemp(prefix="trees-run-"))
+        result = nlp_run.run(sample_files(), TEXT, develop=True, tree_store=store)
+        self.assertEqual(result["status"], "ok", result)
+        files = {f["name"]: f for f in result["trees"]["files"]}
+        self.assertEqual(sorted(files), ["ana001.tree", "ana002.tree", "ana003.tree", "ana004.tree", "final.tree"])
+        self.assertEqual((files["ana003.tree"]["pass"], files["ana003.tree"]["passName"], files["ana003.tree"]["file"]),
+                         (3, "greeting", "spec/greeting.nlp"))
+        self.assertEqual((files["ana001.tree"]["passName"], files["ana001.tree"]["file"]), ("nil", None))
+        self.assertIsNone(files["final.tree"]["pass"])
+        read = lambda name: store.path(result["trees"]["run"], name, None).read_text(encoding="utf-8")
+        # The greetings are built by pass 3: not in the tree after pass 2, there after pass 3.
+        self.assertNotIn("_greeting", read("ana002.tree"))
+        self.assertIn("_greeting", read("ana003.tree"))
+        self.assertIn("PASS 3 (greeting)", read("ana003.tree"))
+        # The pass trees are not the analyzer's output.
+        self.assertEqual(list(result["output"]), ["output.json"])
+
+    def test_without_debug_only_the_final_tree_is_kept(self):
+        import tempfile
+        store = TreeStore(tempfile.mkdtemp(prefix="trees-run-"))
+        result = nlp_run.run(sample_files(), TEXT, tree_store=store)
+        self.assertEqual([f["name"] for f in result["trees"]["files"]], ["final.tree"])
+        self.assertIn("_greeting", store.path(result["trees"]["run"], "final.tree", None).read_text(encoding="utf-8"))
+
     def test_an_endless_loop_is_stopped(self):
         loop = '@CODE\nL("i") = 0;\nwhile (1) { L("i")++; }\n@@CODE\n'
         started = time.monotonic()
@@ -214,6 +241,21 @@ class Server(unittest.TestCase):
             with self.subTest(body=body[:20]):
                 code, answer = self.request("/api/run", body)
                 self.assertEqual((code, json.loads(answer)["status"]), (400, "invalid"))
+
+    def test_a_run_s_trees_are_read_one_at_a_time(self):
+        code, body = self.request("/api/run", json.dumps({"files": sample_files(), "text": TEXT, "develop": True}).encode())
+        result = json.loads(body)
+        self.assertEqual((code, result["status"]), (200, "ok"))
+        run = result["trees"]["run"]
+        self.assertEqual(len(result["trees"]["files"]), 5)
+        code, tree = self.request(f"/api/run/tree?run={run}&name=ana003.tree")
+        self.assertEqual(code, 200)
+        self.assertIn(b"PASS 3 (greeting)", tree)
+        self.assertIn(b"_greeting", tree)
+        for path in [f"/api/run/tree?run={run}&name=output.json", f"/api/run/tree?run={run}&name=../final.tree",
+                     "/api/run/tree?run=nothing&name=final.tree"]:
+            with self.subTest(path=path):
+                self.assertEqual(self.request(path)[0], 404)
 
     def test_no_site_without_dist(self):
         self.assertEqual(self.request("/")[0], 404)

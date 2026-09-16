@@ -4,10 +4,12 @@
     python server/app.py --dist dist      # ...and the built site, from the same origin
 
     GET  /api/health    {"ok": true, "engine": "2.2.38", "timeout": 10, "maxRuns": 2, "signIn": false, "github": false}
-    POST /api/run       {"files": {"spec/analyzer.seq": "...", ...}, "text": "..."}
+    POST /api/run       {"files": {"spec/analyzer.seq": "...", ...}, "text": "...", "develop"?: true}
                         -> 200 with nlp_run.run()'s result, whatever the run did;
                            400 for a request no analyzer could make, 401 not signed in,
                            413 too large, 503 when every run slot stays busy
+    GET  /api/run/tree?run=&name=final.tree|ana001.tree
+                        one of a run's parse trees, as text (trees.py keeps them a while)
 
   GitHub (see SIGNING IN):
 
@@ -44,6 +46,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -55,6 +58,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import nlp_run
 from github import GitHub, GitHubError
 from sessions import Session, Sessions
+from trees import TreeStore
 
 MAX_BODY = 12 * nlp_run.MB
 COOKIE = "nlp_studio"
@@ -104,6 +108,7 @@ class RunServer(ThreadingHTTPServer):
         self.dev_token = dev_token
         self.dev_login: str | None = None
         self.sessions = Sessions()
+        self.trees = TreeStore()
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -213,6 +218,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._callback()
         if path.startswith("/api/github/"):
             return self._github(path)
+        if path == "/api/run/tree":
+            return self._tree()
         if path.startswith("/api/"):
             return self._json(404, {"status": "invalid", "message": "No such API."})
         self._site(super().do_GET)
@@ -232,7 +239,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._commit()
         if path != "/api/run":
             return self._json(404, {"status": "invalid", "message": "No such API."})
-        if srv.sign_in and not self._session():
+        session = self._session() if srv.sign_in else None
+        if srv.sign_in and not session:
             return self._json(401, {"status": "unauthorized", "message": "Sign in with GitHub to run analyzers."})
         try:
             length = int(self.headers.get("Content-Length") or 0)
@@ -242,7 +250,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(413, {"status": "invalid", "message": f"A run request may be at most {MAX_BODY // nlp_run.MB} MB."})
         try:
             body = json.loads(self.rfile.read(length) or b"{}")
-            files, text = body.get("files"), body.get("text")
+            files, text, develop = body.get("files"), body.get("text"), body.get("develop") is True
         except (ValueError, AttributeError):
             return self._json(400, {"status": "invalid", "message": "The request is not JSON with files and text."})
 
@@ -250,7 +258,8 @@ class Handler(SimpleHTTPRequestHandler):
         if not srv.gate.acquire(timeout=opts.queue_wait):
             return self._json(503, {"status": "busy", "message": "Every run slot is taken. Try again in a moment."})
         try:
-            result = nlp_run.run(files, text, python=opts.python, timeout=opts.timeout)
+            result = nlp_run.run(files, text, python=opts.python, timeout=opts.timeout, develop=develop,
+                                 tree_store=srv.trees, owner=session.login if session else None)
         except nlp_run.RunError as err:
             return self._json(400, {"status": "invalid", "message": str(err)})
         finally:
@@ -292,6 +301,24 @@ class Handler(SimpleHTTPRequestHandler):
         except GitHubError as err:
             return self._json(err.status, {"status": "github", "message": str(err)})
         self._json(200, result)
+
+    def _tree(self) -> None:
+        """One kept parse tree, as text -- read by the person whose run wrote it."""
+        srv = self.server
+        session = self._session() if srv.sign_in else None
+        if srv.sign_in and not session:
+            return self._json(401, {"status": "unauthorized", "message": "Sign in with GitHub first."})
+        query = self._query()
+        path = srv.trees.path(query.get("run", ""), query.get("name", ""), session.login if session else None)
+        if not path:
+            return self._json(404, {"status": "invalid", "message": "That parse tree is no longer kept. Run the analyzer again."})
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(path.stat().st_size))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        with open(path, "rb") as fh:
+            shutil.copyfileobj(fh, self.wfile, 1024 * 1024)
 
     def _me(self) -> None:
         srv = self.server
