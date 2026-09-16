@@ -38,7 +38,8 @@ npm run dev                  # in a second terminal: http://localhost:5173
 
 Edit an analyzer and press **Run** (F5) to run it on the input file. Its output, problems and
 log appear under the editor, and its parse tree is listed under **Parse trees**: open it and it
-fills the editor, read-only and coloured. Hover over a node to see the text it covers; go to
+fills the editor, read-only and coloured the way the VS Code extension colours trees — node
+names green, rewrites bold, offsets blue. Hover over a node to see the text it covers; go to
 definition (F12) opens the rule that built it, or selects a token's text in the input. Tick
 **Debug** to also keep the tree after every pass. Trees can be large, so the run server keeps
 them for half an hour and sends one only when it is opened. Without the run server the studio still edits —
