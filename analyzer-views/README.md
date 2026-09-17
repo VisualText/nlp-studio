@@ -4,10 +4,11 @@ This package shows an NLP++ analyzer's pass sequence, knowledge base, run result
 [NLP++ extension for VS Code](https://github.com/VisualText/vscode-nlp) does, on any web page.
 It works with plain DOM code, React or any other framework.
 
-It exists so that every page that lists an analyzer does it the same way. NLP Studio uses it
-today, and the admin console's Browse and run is next. A rule is changed once, here: for
-example, the knowledge base lists only `.dict` and `.kbb` files, never the engine's `.kb`
-files.
+It exists so that every page that lists an analyzer does it the same way. NLP Studio uses it,
+and so does the admin console's Browse and run, which installs it from a release. A rule is
+changed once, here, and both pages get it: the knowledge base lists only `.dict` and `.kbb`
+files and never the engine's `.kb` files, a switched-off pass keeps the number the engine
+gives it, and a `-DEV` run's per-pass trees and rule matches are read the same way in each.
 
 ## Use
 
