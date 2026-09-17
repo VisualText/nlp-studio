@@ -11,8 +11,8 @@ see the parse tree — with no install, no C++ toolchain, and no VS Code.
 | Phase | What | State |
 |---|---|---|
 | **1. Stopgap** | `openvscode-server` container with the real `dehilster.nlp` extension baked in | **in this repo** — see [stopgap/](stopgap/) |
-| **2. Studio** | Purpose-built web app: Monaco front end + an API server running the engine | **started** — in [studio/](studio/): the editor, and running analyzers through a local run server |
-| **Shared lists** | `@visualtext/analyzer-views`: the pass sequence and knowledge base as web components, for the studio and any other page that lists an analyzer | **in this repo** — see [analyzer-views/](analyzer-views/) |
+| **2. Studio** | Purpose-built web app: Monaco front end + an API server running the engine | **live** — in [studio/](studio/): the editor, the run server, analyzers opened from GitHub and committed back, deployed at studio.visualtext.org/studio/ for invited people |
+| **Shared views** | `@visualtext/analyzer-views`: the sequence, knowledge base, output files, parse trees, code, log and values as web components, for the studio and any other page that shows an analyzer | **released** — see [analyzer-views/](analyzer-views/) |
 | **3. Client-side** | Emscripten/WASM build of the engine for zero-server demos | speculative |
 
 Phase 1 exists to have something live quickly — a "Try NLP++" button for
@@ -39,7 +39,8 @@ npm run dev                  # in a second terminal: http://localhost:5173
 ```
 
 Edit an analyzer and press **Run** (F5) to run it on the input file. Under the editor, **Output**
-lists the files it wrote, with **Problems** and **Log** beside it; the same files are listed in
+shows the values the run found — the fields its `output.json` filled, by name — and lists the
+files it wrote, with **Problems** and **Log** beside it; the same files are listed in
 the file list under **Output**, and its parse tree under **Parse trees**, each with the icon the
 VS Code extension gives it. Click one and it fills the
 editor, read-only — a tree coloured as the extension colours trees, node names green, rewrites
