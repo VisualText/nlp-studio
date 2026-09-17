@@ -45,7 +45,10 @@ VS Code extension gives it. Click one and it fills the
 editor, read-only — a tree coloured as the extension colours trees, node names green, rewrites
 bold, offsets blue. Hover over a node to see the text it covers; go to
 definition (F12) opens the rule that built it, or selects a token's text in the input. Tick
-**Debug** to also keep the tree after every pass. Trees can be large, so the run server keeps
+**Debug** — the engine's `-DEV` — to also keep the tree after every pass: each pass in the
+sequence then carries two buttons, its parse tree and what its rules matched (the input with
+`<<<what a rule built>>>` and `((( what one matched )))` marked, as the extension's Display
+Matched Rules shows it). Trees can be large, so the run server keeps
 them for half an hour and sends one only when it is opened. Without the run server the studio still edits —
 colouring, hover, go to definition, completion, rename and problems all run in the browser,
 the language features in the NLP++ language server from `vscode-nlp` in a Web Worker.

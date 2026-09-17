@@ -29,7 +29,7 @@ sidebar.append(sequence, kb);
 
 | Element | Lists | Extension view |
 |---|---|---|
-| `<nlp-sequence>` | The passes in `analyzer.seq`, numbered as the engine numbers them | Analyzer sequence |
+| `<nlp-sequence>` | The passes in `analyzer.seq`, numbered as the engine numbers them, each offering the tree and the rule matches a `-DEV` run left | Analyzer sequence |
 | `<nlp-knowledge-base>` | The `.dict` and `.kbb` files under `kb/` | KB |
 | `<nlp-output>` | The files a run wrote, by name | Output files |
 | `<nlp-trees>` | A run's parse trees: `final.tree`, then the tree after each pass | Output files (trees) |
@@ -51,6 +51,26 @@ Every list element takes:
 
 `<nlp-sequence>` also takes `sequence`, the text of `spec/analyzer.seq`. Its `passes`
 property returns the passes it read from that text.
+
+With `-DEV` on, the engine writes the parse tree after every pass. Hand those trees to
+`<nlp-sequence>` as `trees` and each pass that has one gets two buttons, as the extension's
+sequence view does: its **parse tree**, and **what its rules matched**. Both raise an event
+with the tree's name and the pass number; the page fetches that tree and shows it, or turns
+it into marked-up text with `ruleMatches()`:
+
+```js
+sequence.trees = [{ name: "ana003.tree", pass: 3, passName: "greeting" }];
+sequence.addEventListener("nlp-open-tree", (e) => openTree(e.detail.path));
+sequence.addEventListener("nlp-open-matches", async (e) => {
+  const tree = await fetchTree(e.detail.path);           // the pass's tree, from wherever the run kept it
+  show(ruleMatches(tree, inputText), "txxt");            // the input with every match marked
+});
+```
+
+`ruleMatches(treeText, inputText)` returns the input with `<<<built>>>` around what a rule
+built and `((( fired )))` around what it matched without building — the `.txxt` file the
+extension writes, which `<nlp-code language="txxt">` colors. `{ builtOnly: true }` marks
+only what built a node, and `matchesIn()` gives the spans themselves.
 
 `<nlp-trees>` takes `trees`, as `{ name, pass, passName, bytes }` objects where `pass` is
 `null` for `final.tree`, and `skipped`, the names of trees too large to keep:
@@ -132,6 +152,8 @@ follow the same light and dark choice.
   extension's token colors.
 - `problemsIn`, `problemsInLog`, `problemWhere` and `logLines` read the engine's `err.log` and
   `make_ana.log`.
+- `ruleMatches`, `matchesIn` and `matchCount` read a pass's tree for what its rules matched
+  in the text.
 - `filledFields` and `readOutput` read `output.json`.
 
 ## Develop

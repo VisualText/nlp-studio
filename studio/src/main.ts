@@ -22,7 +22,7 @@ import { languageFor } from "./lsp/convert";
 import { type AnalyzerEntry, fileUri, loadFiles, loadIndex, pathOf } from "./analyzers";
 import {
 	type IconName, type NlpKnowledgeBase, type NlpSequence, type Pass, type TreeFile as ListedTree,
-	fileSize, iconElement, passes, treeTitle,
+	fileSize, iconElement, passes, ruleMatches, treeTitle,
 } from "@visualtext/analyzer-views";
 import {
 	type Account, type CommitResult, type FoundAnalyzer, type RecentAnalyzer, type RepoAnalyzers, type Repository,
@@ -92,8 +92,10 @@ export class Studio {
 	analyzers: AnalyzerEntry[] = [];
 	current: AnalyzerEntry | undefined;
 	currentPath: string | undefined;
-	// A parse tree or an output file in the editor, when one is: currentPath is then undefined.
+	// A parse tree, what a pass's rules matched, or an output file in the editor, when one
+	// is: currentPath is then undefined.
 	currentTree: string | undefined;
+	currentMatches: string | undefined;
 	currentOutput: string | undefined;
 	// The input a run reads: the input file opened last, or the analyzer's first.
 	inputPath: string | undefined;
@@ -113,6 +115,8 @@ export class Studio {
 	// Kept apart from the analyzer's files: never a draft, never run, committed or zipped.
 	private lastRun: { id: string; trees: RunTrees | null; output: Record<string, string>; context: TreeContext } | undefined;
 	private readonly treeModels = new Map<string, monaco.editor.ITextModel>();
+	// What each pass's rules matched, worked out from its tree the first time it is asked for.
+	private readonly matchModels = new Map<string, monaco.editor.ITextModel>();
 	private readonly outputModels = new Map<string, monaco.editor.ITextModel>();
 	private lastPath: string | undefined;
 	private treeRequest = 0;
@@ -242,6 +246,7 @@ export class Studio {
 		this.currentPath = path;
 		this.lastPath = path;
 		this.currentTree = undefined;
+		this.currentMatches = undefined;
 		this.currentOutput = undefined;
 		if (path.startsWith("input/")) {
 			this.inputPath = path;
@@ -285,6 +290,7 @@ export class Studio {
 		this.editor.updateOptions({ readOnly: true });
 		this.currentPath = undefined;
 		this.currentTree = undefined;
+		this.currentMatches = undefined;
 		this.currentOutput = name;
 		byId("path").textContent = `${this.current.title} / output / ${name}`;
 		this.markOpen();
@@ -302,17 +308,8 @@ export class Studio {
 		const request = ++this.treeRequest;
 		let model = this.treeModels.get(name);
 		if (!model) {
-			const before = byId("status").textContent ?? "";
-			this.say(`Loading the ${treeTitle(file)} (${fileSize(file.size)})…`);
-			let text: string;
-			try {
-				text = await fetchTree(run.trees.run, name);
-			} catch (err) {
-				if (request === this.treeRequest) this.say(`Could not open the ${treeTitle(file)}: ${messageOf(err)}`);
-				return false;
-			}
-			if (this.lastRun !== run) return false; // another run or analyzer meanwhile
-			this.say(before);
+			const text = await this.treeText(run, file, request);
+			if (text === null) return false;
 			model = this.treeModels.get(name);
 			if (!model) {
 				model = monaco.editor.createModel(text, "tree", monaco.Uri.parse(`nlp-tree:/${run.trees.run}/${name}`));
@@ -321,28 +318,88 @@ export class Studio {
 			}
 		}
 		if (request !== this.treeRequest) return false; // another was opened meanwhile
+		this.showRunDocument(model, name, `${this.current.title} / ${treeTitle(file)} · ${name}`);
+		this.currentTree = name;
+		this.markOpen();
+		return true;
+	}
+
+	// Open what one pass's rules matched: the input the run read with every match of that
+	// pass marked, as the VS Code extension's Display Matched Rules shows it. It is worked
+	// out here from the pass's tree -- the engine writes no such file -- so it needs the
+	// same debug run the tree came from, and nothing more from the server.
+	async openMatches(treeName: string): Promise<boolean> {
+		const run = this.lastRun;
+		const file = run?.trees?.files.find((f) => f.name === treeName);
+		if (!run?.trees || !file || !this.current) return false;
+		const name = treeName.replace(/\.tree$/, ".txxt");
+		const request = ++this.treeRequest;
+		let model = this.matchModels.get(name);
+		if (!model) {
+			const text = await this.treeText(run, file, request);
+			if (text === null) return false;
+			model = this.matchModels.get(name);
+			if (!model) {
+				model = monaco.editor.createModel(ruleMatches(text, run.context.text), "txxt",
+					monaco.Uri.parse(`nlp-matches:/${run.trees.run}/${name}`));
+				this.matchModels.set(name, model);
+			}
+		}
+		if (request !== this.treeRequest) return false;
+		const what = file.pass === null ? "the whole run" : `pass ${file.pass}${file.passName ? ` (${file.passName})` : ""}`;
+		this.showRunDocument(model, name, `${this.current.title} / what ${what} matched · ${name}`);
+		this.currentMatches = name;
+		this.markOpen();
+		return true;
+	}
+
+	// One of the run's trees as text: the model's, when it is already open, else the
+	// server's. Null when it could not be had, with the reason in the header.
+	private async treeText(run: NonNullable<Studio["lastRun"]>, file: TreeFile, request: number): Promise<string | null> {
+		const open = this.treeModels.get(file.name);
+		if (open) return open.getValue();
+		const before = byId("status").textContent ?? "";
+		this.say(`Loading the ${treeTitle(file)} (${fileSize(file.size)})…`);
+		let text: string;
+		try {
+			text = await fetchTree(run.trees!.run, file.name);
+		} catch (err) {
+			if (request === this.treeRequest) this.say(`Could not open the ${treeTitle(file)}: ${messageOf(err)}`);
+			return null;
+		}
+		if (this.lastRun !== run) return null; // another run or analyzer meanwhile
+		this.say(before);
+		return text;
+	}
+
+	// A document the run produced, read-only, in the editor.
+	private showRunDocument(model: monaco.editor.ITextModel, name: string, header: string): void {
 		this.editor.setModel(model);
 		this.editor.updateOptions({ readOnly: true });
 		this.currentPath = undefined;
+		this.currentTree = undefined;
+		this.currentMatches = undefined;
 		this.currentOutput = undefined;
-		this.currentTree = name;
-		byId("path").textContent = `${this.current.title} / ${treeTitle(file)} · ${name}`;
-		this.markOpen();
+		byId("path").textContent = header;
 		this.editor.focus();
 		this.showProblems();
-		return true;
 	}
 
 	// Let go of the last run's files; the editor goes back to a file if it was showing one.
 	private forgetRunFiles(): void {
 		this.treeRequest++;
-		const showing = this.currentTree !== undefined || this.currentOutput !== undefined;
+		const showing = this.currentTree !== undefined || this.currentMatches !== undefined
+			|| this.currentOutput !== undefined;
 		this.lastRun = undefined;
 		this.currentTree = undefined;
+		this.currentMatches = undefined;
 		this.currentOutput = undefined;
 		if (showing) this.editor.setModel(null);
-		for (const model of [...this.treeModels.values(), ...this.outputModels.values()]) model.dispose();
+		for (const model of [...this.treeModels.values(), ...this.matchModels.values(), ...this.outputModels.values()]) {
+			model.dispose();
+		}
 		this.treeModels.clear();
+		this.matchModels.clear();
 		this.outputModels.clear();
 	}
 
@@ -755,6 +812,7 @@ export class Studio {
 	// goes back to the analyzer file it had.
 	private showRunFiles(result: RunResult, context: TreeContext): void {
 		const tree = this.currentTree;
+		const matches = this.currentMatches;
 		const output = this.currentOutput;
 		this.forgetRunFiles();
 		const files = result.output ?? {};
@@ -763,9 +821,12 @@ export class Studio {
 		}
 		this.renderFiles();
 		this.showChanges();
+		const matchTree = matches?.replace(/\.txxt$/, ".tree");
 		if (tree !== undefined && this.lastRun?.trees?.files.some((f) => f.name === tree)) void this.openTree(tree);
-		else if (output !== undefined && this.lastRun?.output[output] !== undefined) this.openOutput(output);
-		else if (tree === undefined && output === undefined) this.markOpen();
+		else if (matchTree !== undefined && this.lastRun?.trees?.files.some((f) => f.name === matchTree)) {
+			void this.openMatches(matchTree);
+		} else if (output !== undefined && this.lastRun?.output[output] !== undefined) this.openOutput(output);
+		else if (tree === undefined && matches === undefined && output === undefined) this.markOpen();
 		else this.openPath(this.lastPath ?? "spec/analyzer.seq");
 	}
 
@@ -819,6 +880,11 @@ export class Studio {
 		const sequence = document.createElement("nlp-sequence");
 		sequence.files = entry.files;
 		sequence.sequence = this.models.get("spec/analyzer.seq")?.getValue() ?? "";
+		// A Debug run keeps the tree after every pass, so each pass offers two more things,
+		// as the extension's sequence view does: that tree, and what its rules matched.
+		sequence.trees = this.lastRun?.trees?.files.map(listedTree);
+		sequence.addEventListener("nlp-open-tree", (e) => void this.openTree(e.detail.path));
+		sequence.addEventListener("nlp-open-matches", (e) => void this.openMatches(e.detail.path));
 		listen(sequence);
 		const kb = document.createElement("nlp-knowledge-base");
 		kb.files = entry.files;

@@ -3,7 +3,8 @@
 import { describe, expect, it } from "vitest";
 import {
 	fileIcon, fileSize, outputOrder, passComment, passIcon, passLabel, passTooltip, passes, shownInKnowledgeBase,
-	filledFields, langFor, logLines, problemWhere, problemsInLog, readOutput, treeLabel, treeNote, treeOrder, treeTitle,
+	filledFields, langFor, logLines, matchCount, matchesIn, problemWhere, problemsInLog, readOutput, ruleMatches,
+	treeLabel, treeNote, treeOrder, treeTitle,
 } from "../src/rules.js";
 
 describe("analyzer.seq", () => {
@@ -170,5 +171,47 @@ describe("the values a run found", () => {
 	it("come from output.json's text, or say why it is not JSON", () => {
 		expect(readOutput('{"greetings": 3}')).toEqual({ output: { greetings: 3 } });
 		expect("error" in readOutput("{oops")).toBe(true);
+	});
+});
+
+describe("what a pass matched", () => {
+	// A pass tree as the engine writes it with -DEV: the sentence, then the nodes a rule
+	// matched in it. "fired" marks a match, "blt" one that built a node.
+	const text = "I live in San Diego, in California.";
+	const tree = [
+		"_ROOT [0,34,0,34,0,0,node]",
+		"   _city [10,18,10,18,3,12,node,fired,blt]",
+		"      San [10,12,10,12,0,0,alpha]",
+		"      Diego [14,18,14,18,0,0,alpha]",
+		"   _state [24,33,24,33,3,20,node,fired]",
+		"   . [34,34,34,34,0,0,punct]",
+	].join("\n");
+
+	it("is the input with every match marked, built ones apart from the rest", () => {
+		expect(ruleMatches(tree, text)).toBe("I live in <<<San Diego>>>, in (((California))).");
+	});
+	it("keeps only what built a node when asked for that", () => {
+		expect(ruleMatches(tree, text, { builtOnly: true })).toBe("I live in <<<San Diego>>>, in California.");
+	});
+	it("marks the outermost match, not the ones inside it", () => {
+		const nested = [
+			"_ROOT [0,34,0,34,0,0,node]",
+			"   _where [10,33,10,33,4,3,node,fired,blt]",
+			"      _city [10,18,10,18,3,12,node,fired,blt]",
+		].join("\n");
+		expect(ruleMatches(nested, text)).toBe("I live in <<<San Diego, in California>>>.");
+	});
+	it("counts code points, so a match after an emoji covers the words it matched", () => {
+		const emoji = "🙂 San Diego";
+		// The tree's ustart/uend count code points: the emoji is one, and two UTF-16 units.
+		expect(ruleMatches("   _city [0,0,2,10,3,12,node,fired,blt]", emoji)).toBe("🙂 <<<San Diego>>>");
+	});
+	it("is the text itself when the pass matched nothing, or wrote no tree", () => {
+		expect(ruleMatches("_ROOT [0,34,0,34,0,0,node]", text)).toBe(text);
+		expect(ruleMatches(null, text)).toBe(text);
+	});
+	it("says how many matches a pass made", () => {
+		expect(matchCount(matchesIn(tree, text))).toBe("2 matches, 1 built");
+		expect(matchCount(matchesIn("   _x [0,0,0,0,3,12,node,fired]", text))).toBe("1 match");
 	});
 });

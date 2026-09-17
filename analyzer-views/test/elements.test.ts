@@ -80,6 +80,30 @@ describe("<nlp-sequence>", () => {
 		document.body.append(el);
 		expect(el.hidden).toBe(true);
 	});
+
+	// A -DEV run keeps a tree per pass; the pass it belongs to offers it, and what its
+	// rules matched, as the extension's sequence view does.
+	it("puts a tree and a rule-matches button on every pass a debug run wrote a tree for", () => {
+		const el = make();
+		expect(el.querySelectorAll(".nlp-act").length).toBe(0);
+		el.trees = [
+			{ name: "final.tree", pass: null },
+			{ name: "ana002.tree", pass: 2, passName: "funcs" },
+		];
+		const rows = [...el.querySelectorAll("li")].map((li) =>
+			[...li.querySelectorAll(".nlp-act")].map((b) => b.className));
+		expect(rows).toEqual([[], [], ["nlp-act tree", "nlp-act matches"], []]);
+	});
+	it("says which pass's tree or matches were asked for", () => {
+		const el = make();
+		el.trees = [{ name: "ana002.tree", pass: 2, passName: "funcs" }];
+		const asked: [string, string, number | undefined][] = [];
+		for (const type of ["nlp-open-tree", "nlp-open-matches"] as const) {
+			document.body.addEventListener(type, (e) => asked.push([type, e.detail.path, e.detail.pass]));
+		}
+		for (const b of el.querySelectorAll<HTMLButtonElement>(".nlp-act")) b.click();
+		expect(asked).toEqual([["nlp-open-tree", "ana002.tree", 2], ["nlp-open-matches", "ana002.tree", 2]]);
+	});
 });
 
 describe("<nlp-knowledge-base>", () => {
