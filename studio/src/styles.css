@@ -117,7 +117,6 @@ button.commit { border-color: var(--accent); color: var(--on-ink); font-weight: 
 .file-name { margin: 6px 0 4px; font-size: 12px; color: var(--muted); }
 .file-text { margin: 0 0 12px; padding: 8px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
 	white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px; }
-.log { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
 
 .results-tree { font-size: 12.5px; padding: 2px 10px; margin-right: 4px; }
 .check { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; cursor: pointer; user-select: none; }
@@ -136,7 +135,6 @@ button.run.busy::before { content: ""; display: inline-block; width: 10px; heigh
 .run-files { max-width: 420px; --nlp-muted: var(--muted); --nlp-hover: var(--on); --nlp-selected: var(--on);
 	--nlp-selected-ink: var(--on-ink); }
 
-.run-problems { display: flex; flex-direction: column; }
-.run-problem { display: flex; gap: 14px; text-align: left; border: 0; border-radius: 4px; background: none; padding: 4px 6px; }
-.run-problem:hover:not(:disabled) { background: var(--on); }
-.run-problem .where { color: var(--error); white-space: nowrap; }
+/* A run's problems and log: <nlp-log>, in the studio's colours. */
+.run-log { --nlp-muted: var(--ink); --nlp-hover: var(--on); --nlp-error: var(--error); }
+.run-log .nlp-log-lines { margin: 0; padding: 0; }

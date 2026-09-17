@@ -109,24 +109,28 @@ export class RunPanel {
 		this.body.append(list);
 	}
 
+	// The problems, and on their own tab the engine's log: <nlp-log> from
+	// @visualtext/analyzer-views, as other pages show a run's log. A problem in a pass file
+	// opens it at its line.
 	private renderProblems(result: RunResult, problems: RunProblem[]): void {
 		if (!problems.length) {
 			if (result.status === "ok") this.body.append(make("p", "note", "No problems reported."));
 			return;
 		}
-		const list = make("div", "run-problems");
-		for (const p of problems) {
-			const where = p.file ? `${p.file}:${p.line}` : p.pass ? `pass ${p.pass}` : "analyzer";
-			const row = make("button", "run-problem");
-			row.append(make("span", "where mono", where), make("span", "what", p.message));
-			if (p.file) row.addEventListener("click", () => this.hooks.open(p.file!, { lineNumber: Math.max(1, p.line), column: 1 }));
-			else row.disabled = true;
-			list.append(row);
-		}
-		this.body.append(list);
+		this.body.append(this.log({ problems }));
 	}
 
 	private renderLog(log: string[]): void {
-		this.body.append(log.length ? make("pre", "log mono", log.join("\n")) : make("p", "note", "The engine logged nothing."));
+		this.body.append(log.length ? this.log({ lines: log }) : make("p", "note", "The engine logged nothing."));
+	}
+
+	private log(what: { problems?: RunProblem[]; lines?: string[] }): HTMLElement {
+		const el = document.createElement("nlp-log");
+		el.setAttribute("heading", "");
+		el.className = "run-log";
+		el.problems = what.problems;
+		el.lines = what.lines;
+		el.addEventListener("nlp-open", (e) => this.hooks.open(e.detail.path, { lineNumber: e.detail.line ?? 1, column: 1 }));
+		return el;
 	}
 }

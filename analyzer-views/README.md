@@ -1,6 +1,6 @@
 # @visualtext/analyzer-views
 
-This package shows an NLP++ analyzer's pass sequence, knowledge base, run results and code the same way the
+This package shows an NLP++ analyzer's pass sequence, knowledge base, run results, code and log the same way the
 [NLP++ extension for VS Code](https://github.com/VisualText/vscode-nlp) does, on any web page.
 It works with plain DOM code, React or any other framework.
 
@@ -13,7 +13,7 @@ files.
 
 ```js
 import "@visualtext/analyzer-views/style.css";
-import "@visualtext/analyzer-views";          // defines the five <nlp-*> elements
+import "@visualtext/analyzer-views";          // defines the six <nlp-*> elements
 
 const sequence = document.createElement("nlp-sequence");
 sequence.files = ["spec/analyzer.seq", "spec/funcs.nlp", "kb/user/hier.kb", "kb/user/colors.dict"];
@@ -34,6 +34,7 @@ sidebar.append(sequence, kb);
 | `<nlp-output>` | The files a run wrote, by name | Output files |
 | `<nlp-trees>` | A run's parse trees: `final.tree`, then the tree after each pass | Output files (trees) |
 | `<nlp-code>` | One file's text, read-only, colored by NLP++'s grammars | The editor's coloring |
+| `<nlp-log>` | A run's problems, each opening its pass at its line, then the log's lines | Logging |
 
 Every list element takes:
 
@@ -72,7 +73,8 @@ code.text = treeText;
 The text shows plain at once, then colored when the grammars have loaded. Loading happens
 once per page, on first use, as separate chunks. A file that isn't NLP++, or is longer than
 200,000 characters, stays plain. Tokens are rendered as text; the file is never parsed as
-HTML. Give the element a height and it scrolls.
+HTML. Give the element a height and it scrolls. Set `line` (from 1) to mark a line and scroll it
+into view, for example the line a problem is on.
 
 The grammars are the NLP++ extension's, from
 [nlpplus-tmbundle](https://github.com/VisualText/nlpplus-tmbundle) (`src/grammars/`). The
@@ -81,7 +83,19 @@ stock themes don't know, such as tree nodes, rewrites and KB concepts, added to 
 and `dark-plus`. NLP Studio's Monaco editor uses the same highlighter
 (`nlpHighlighter()`), so a file reads the same there.
 
-A list element with nothing to list hides itself. The rows are ordinary light DOM, so a page can
+`<nlp-log>` takes `problems`, as `{ file, pass, line, message }`, and `lines`, the log as text or
+an array. A problem whose pass has a file raises `nlp-open` with `detail.path` and
+`detail.line`. A page that has the engine's log text rather than problems gets them from
+`problemsInLog(logText, seqText, paths)`, which reads the log as NLP Studio's run server does:
+
+```js
+const log = document.createElement("nlp-log");
+log.problems = problemsInLog(errLog, seqText, paths);
+log.lines = errLog;
+log.addEventListener("nlp-open", (e) => openFile(e.detail.path, e.detail.line));
+```
+
+A list element with nothing to list hides itself, and so does `<nlp-log>`. The rows are ordinary light DOM, so a page can
 style them, query them (`button[data-path]`) and test them.
 
 **React 18** passes attributes but not properties to custom elements. Set `files`,
@@ -93,7 +107,7 @@ style them, query them (`button[data-path]`) and test them.
 `prefers-color-scheme` unless `<html>` has `data-theme="light"` or `data-theme="dark"`. To
 match a page's own colors, set these properties on any element around the lists:
 `--nlp-muted`, `--nlp-hover`, `--nlp-selected`, `--nlp-selected-ink`, `--nlp-changed`,
-`--nlp-font`, and `--nlp-icon-dna`, `--nlp-icon-dict` and the other icon colors. Code colors
+`--nlp-font`, `--nlp-error`, `--nlp-line`, and `--nlp-icon-dna`, `--nlp-icon-dict` and the other icon colors. Code colors
 follow the same light and dark choice.
 
 ## The rules alone
@@ -109,6 +123,8 @@ follow the same light and dark choice.
   what a run wrote.
 - `langFor(path)` names the grammar for a file, and `LIGHT_RULES` and `DARK_RULES` are the
   extension's token colors.
+- `problemsIn`, `problemsInLog`, `problemWhere` and `logLines` read the engine's `err.log` and
+  `make_ana.log`.
 
 ## Develop
 

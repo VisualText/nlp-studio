@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	fileIcon, fileSize, outputOrder, passComment, passIcon, passLabel, passTooltip, passes, shownInKnowledgeBase,
-	langFor, treeLabel, treeNote, treeOrder, treeTitle,
+	langFor, logLines, problemWhere, problemsInLog, treeLabel, treeNote, treeOrder, treeTitle,
 } from "../src/rules.js";
 
 describe("analyzer.seq", () => {
@@ -125,5 +125,32 @@ describe("which grammar reads a file", () => {
 	});
 	it("gives a file that is not NLP++ none", () => {
 		expect([langFor("README.md"), langFor("kb/user/.keep"), langFor(""), langFor(undefined)]).toEqual([null, null, null, null]);
+	});
+});
+
+describe("the engine's log", () => {
+	// The run server's own case (studio/server/test_nlp_run.py), so the two readings agree.
+	const log = "0 0 [Date: 09:32:33 09/15/26]\n0 0 [Build analyzer time=0.004 sec]\n"
+		+ "4 2 [Fncall: Error: Unknown fn/action name=X]\n0 0 [Errors in loading analyzer.]\n";
+	const seq = "tokenize\tnil\n/nlp\toff\nnlp\tfuncs\nnlp\toutput";
+	const files = ["spec/off.nlp", "spec/funcs.nlp", "spec/output.nlp"];
+
+	it("finds the problems, each in its pass's file, and leaves out the timings and the date", () => {
+		expect(problemsInLog(log, seq, files)).toEqual([
+			{ file: "spec/output.nlp", pass: 4, line: 2, message: "Fncall: Error: Unknown fn/action name=X" },
+			{ file: null, pass: 0, line: 0, message: "Errors in loading analyzer." },
+		]);
+	});
+	it("says where a problem is", () => {
+		expect([
+			problemWhere({ file: "spec/output.nlp", pass: 4, line: 2 }),
+			problemWhere({ file: null, pass: 1, line: 3 }),
+			problemWhere({ file: null, pass: 0, line: 0 }),
+		]).toEqual(["spec/output.nlp:2", "pass 1", "analyzer"]);
+	});
+	it("reads a log as its lines, without the blank ones", () => {
+		expect(logLines("a\r\n\n  \nb")).toEqual(["a", "b"]);
+		expect(logLines(["a", "", "b"])).toEqual(["a", "b"]);
+		expect(logLines(null)).toEqual([]);
 	});
 });
