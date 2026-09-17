@@ -5,6 +5,7 @@
 //   <nlp-knowledge-base>  the .dict and .kbb files, as its KNOWLEDGE BASE view
 //   <nlp-output>          the files a run wrote, as its OUTPUT FILES view
 //   <nlp-trees>           a run's parse trees: final.tree, and the tree after each pass
+//   <nlp-code>            a file's text, read-only, coloured by NLP++'s own grammars
 //
 // Give one what to list; it says when a file is picked:
 //
@@ -25,11 +26,16 @@
 // Events:      nlp-open   { path }  a file was clicked (a tree by its name)
 //              nlp-revert { path }  its revert button was clicked
 //
+// <nlp-code> takes text, and a path or a language attribute to pick the grammar (see its
+// class).
+//
 // LIGHT DOM, not a shadow root: the rows are ordinary buttons a page can style, test and
 // query (button[data-path]). style.css draws them; its --nlp-* properties theme them.
 
 import { type AnalyzerFile, fileSize, shownInKnowledgeBase, toFile } from "./files.js";
+import { nlpTokens } from "./highlight.js";
 import { type IconName, fileIcon, iconElement, passIcon } from "./icons.js";
+import { type NlpLanguage, NLP_LANGUAGES, langFor } from "./languages.js";
 import { type TreeFile, outputOrder, treeLabel, treeNote, treeOrder, treeTitle } from "./runs.js";
 import { type Pass, SEQUENCE_FILE, passes, passLabel, passTooltip } from "./sequence.js";
 
@@ -47,8 +53,18 @@ interface Row {
 	classes?: string[];
 }
 
-// Properties a page may set before the element is defined (see connectedCallback).
-const PROPERTIES = ["files", "sequence", "trees", "skipped", "selected", "changed"];
+// A property set on an element before it was defined sits on the instance and hides the
+// class's accessor; take it back through the accessor.
+function upgradeProperties(el: HTMLElement, keys: string[]): void {
+	const self = el as unknown as Record<string, unknown>;
+	for (const key of keys) {
+		if (Object.hasOwn(el, key)) {
+			const value = self[key];
+			delete self[key];
+			self[key] = value;
+		}
+	}
+}
 
 // Outside a browser there is no HTMLElement; the classes still load, so the package's
 // entry point can be imported for its rules.
@@ -80,16 +96,7 @@ abstract class AnalyzerList extends Base {
 	}
 
 	connectedCallback(): void {
-		// A property set before the element was defined sits on the instance and hides the
-		// accessor; take it back through the accessor.
-		const self = this as unknown as Record<string, unknown>;
-		for (const key of PROPERTIES) {
-			if (Object.hasOwn(this, key)) {
-				const value = self[key];
-				delete self[key];
-				self[key] = value;
-			}
-		}
+		upgradeProperties(this, ["files", "sequence", "trees", "skipped", "selected", "changed"]);
 		this.render();
 	}
 
@@ -305,11 +312,89 @@ export class NlpTrees extends AnalyzerList {
 	}
 }
 
+// A file's text, read-only, coloured as the VS Code extension colours it.
+//
+//   const code = document.createElement("nlp-code");
+//   code.path = "spec/funcs.nlp";      // picks the grammar; or set language="tree"
+//   code.text = source;
+//
+// The text shows plain at once, and coloured when the grammars have loaded; a file that
+// is not NLP++, or is too long to colour, stays plain. Tokens are spans with text content
+// -- no HTML string from the file is ever parsed.
+export class NlpCode extends Base {
+	#text = "";
+	#path: string | null = null;
+	#drawn = 0;   // which render the tokens that arrive belong to
+
+	static observedAttributes = ["language"];
+
+	get text(): string {
+		return this.#text;
+	}
+	set text(text: string | null | undefined) {
+		this.#text = text ?? "";
+		this.render();
+	}
+
+	// The file's path, to pick its grammar by name. The language attribute overrides it.
+	get path(): string | null {
+		return this.#path;
+	}
+	set path(path: string | null | undefined) {
+		this.#path = path ?? null;
+		this.render();
+	}
+
+	// The grammar it is coloured with: the language attribute, else the path's.
+	get language(): NlpLanguage | null {
+		const set = this.getAttribute("language");
+		if (set !== null) return (NLP_LANGUAGES as readonly string[]).includes(set) ? set as NlpLanguage : null;
+		return langFor(this.#path);
+	}
+
+	connectedCallback(): void {
+		upgradeProperties(this, ["text", "path"]);
+		this.render();
+	}
+
+	attributeChangedCallback(): void {
+		this.render();
+	}
+
+	private render(): void {
+		if (!this.isConnected) return;
+		const drawn = ++this.#drawn;
+		const pre = document.createElement("pre");
+		pre.className = "nlp-code";
+		pre.textContent = this.#text;
+		this.replaceChildren(pre);
+		const text = this.#text;
+		nlpTokens(text, this.language).then((lines) => {
+			if (!lines || drawn !== this.#drawn) return;
+			const coloured = document.createElement("pre");
+			coloured.className = "nlp-code coloured";
+			lines.forEach((line, i) => {
+				for (const token of line) {
+					const span = document.createElement("span");
+					span.textContent = token.content;
+					for (const [prop, value] of Object.entries(token.htmlStyle ?? {})) span.style.setProperty(prop, value);
+					coloured.append(span);
+				}
+				if (i < lines.length - 1) coloured.append("\n");
+			});
+			this.replaceChildren(coloured);
+		}).catch(() => {
+			// The plain text stays, and is still right.
+		});
+	}
+}
+
 const ELEMENTS: [string, CustomElementConstructor][] = [
 	["nlp-sequence", NlpSequence],
 	["nlp-knowledge-base", NlpKnowledgeBase],
 	["nlp-output", NlpOutput],
 	["nlp-trees", NlpTrees],
+	["nlp-code", NlpCode],
 ];
 
 // Registers the elements, once. The package's entry point calls it; a page that loads
@@ -327,6 +412,7 @@ declare global {
 		"nlp-knowledge-base": NlpKnowledgeBase;
 		"nlp-output": NlpOutput;
 		"nlp-trees": NlpTrees;
+		"nlp-code": NlpCode;
 	}
 	interface HTMLElementEventMap {
 		"nlp-open": CustomEvent<OpenDetail>;

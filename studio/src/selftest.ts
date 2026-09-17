@@ -11,7 +11,7 @@
 import { strFromU8, unzipSync } from "fflate";
 import { monaco } from "./monaco";
 import { LANGUAGE_IDS } from "./highlight";
-import { TREE_COLORS } from "./tokencolors";
+import { TREE_COLORS } from "@visualtext/analyzer-views";
 import { DraftStore } from "./drafts";
 import { recent } from "./github/api";
 import { type Studio, RUN_MARKERS } from "./main";
@@ -86,7 +86,7 @@ export async function selfTest(studio: Studio, options: { run: boolean }): Promi
 		check("NLP++ is tokenized by its grammar, not as plain text", kinds.size > 2, [...kinds].slice(0, 6));
 
 		// A parse tree, coloured as the VS Code extension colours it: node names green,
-		// offsets blue. Both come from the extension's own rules (tokencolors.ts).
+		// offsets blue. Both come from the extension's own rules (analyzer-views/src/colors.ts).
 		const coloured = await monaco.editor.colorize(
 			"_ROOT [0,10,0,10,0,0,node,un]\n   _greeting [0,10,0,10,3,13,node,blt]\n      hello [0,4,0,4,1,0,alpha]\n",
 			"tree", {});
