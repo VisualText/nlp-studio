@@ -1,6 +1,6 @@
 # @visualtext/analyzer-views
 
-This package shows an NLP++ analyzer's pass sequence, knowledge base and run results the same way the
+This package shows an NLP++ analyzer's pass sequence, knowledge base, run results and code the same way the
 [NLP++ extension for VS Code](https://github.com/VisualText/vscode-nlp) does, on any web page.
 It works with plain DOM code, React or any other framework.
 
@@ -13,7 +13,7 @@ files.
 
 ```js
 import "@visualtext/analyzer-views/style.css";
-import "@visualtext/analyzer-views";          // defines the four <nlp-*> elements
+import "@visualtext/analyzer-views";          // defines the five <nlp-*> elements
 
 const sequence = document.createElement("nlp-sequence");
 sequence.files = ["spec/analyzer.seq", "spec/funcs.nlp", "kb/user/hier.kb", "kb/user/colors.dict"];
@@ -33,8 +33,9 @@ sidebar.append(sequence, kb);
 | `<nlp-knowledge-base>` | The `.dict` and `.kbb` files under `kb/` | KB |
 | `<nlp-output>` | The files a run wrote, by name | Output files |
 | `<nlp-trees>` | A run's parse trees: `final.tree`, then the tree after each pass | Output files (trees) |
+| `<nlp-code>` | One file's text, read-only, colored by NLP++'s grammars | The editor's coloring |
 
-Every element takes:
+Every list element takes:
 
 | | |
 |---|---|
@@ -59,7 +60,28 @@ trees.skipped = ["ana003.tree"];
 trees.addEventListener("nlp-open", (e) => openTree(e.detail.path));
 ```
 
-An element with nothing to list hides itself. The rows are ordinary light DOM, so a page can
+`<nlp-code>` takes `text`, and `path` to pick the grammar by the file's name. A
+`language` attribute (`nlp`, `seq`, `kb`, `kbb`, `dict`, `tree`, `txxt`) overrides the path:
+
+```js
+const code = document.createElement("nlp-code");
+code.path = "output/final.tree";
+code.text = treeText;
+```
+
+The text shows plain at once, then colored when the grammars have loaded. Loading happens
+once per page, on first use, as separate chunks. A file that isn't NLP++, or is longer than
+200,000 characters, stays plain. Tokens are rendered as text; the file is never parsed as
+HTML. Give the element a height and it scrolls.
+
+The grammars are the NLP++ extension's, from
+[nlpplus-tmbundle](https://github.com/VisualText/nlpplus-tmbundle) (`src/grammars/`). The
+colors are the extension's too: its `editor.tokenColorCustomizations` rules for scopes that
+stock themes don't know, such as tree nodes, rewrites and KB concepts, added to `light-plus`
+and `dark-plus`. NLP Studio's Monaco editor uses the same highlighter
+(`nlpHighlighter()`), so a file reads the same there.
+
+A list element with nothing to list hides itself. The rows are ordinary light DOM, so a page can
 style them, query them (`button[data-path]`) and test them.
 
 **React 18** passes attributes but not properties to custom elements. Set `files`,
@@ -71,7 +93,8 @@ style them, query them (`button[data-path]`) and test them.
 `prefers-color-scheme` unless `<html>` has `data-theme="light"` or `data-theme="dark"`. To
 match a page's own colors, set these properties on any element around the lists:
 `--nlp-muted`, `--nlp-hover`, `--nlp-selected`, `--nlp-selected-ink`, `--nlp-changed`,
-`--nlp-font`, and `--nlp-icon-dna`, `--nlp-icon-dict` and the other icon colors.
+`--nlp-font`, and `--nlp-icon-dna`, `--nlp-icon-dict` and the other icon colors. Code colors
+follow the same light and dark choice.
 
 ## The rules alone
 
@@ -84,6 +107,8 @@ match a page's own colors, set these properties on any element around the lists:
   mouse-over, label, icon and size.
 - `outputOrder`, `treeOrder`, `treeLabel`, `treeTitle` and `treeNote` order and describe
   what a run wrote.
+- `langFor(path)` names the grammar for a file, and `LIGHT_RULES` and `DARK_RULES` are the
+  extension's token colors.
 
 ## Develop
 

@@ -143,3 +143,43 @@ describe("<nlp-trees>", () => {
 		expect(el.querySelector(".skipped .nlp-note")?.textContent).toBe("Too large to keep: ana007.tree");
 	});
 });
+
+describe("<nlp-code>", () => {
+	const until = async (check: () => boolean) => {
+		for (let i = 0; i < 200 && !check(); i++) await new Promise((r) => setTimeout(r, 25));
+		return check();
+	};
+	const colours = (el: HTMLElement) => [...el.querySelectorAll<HTMLElement>(".coloured span")]
+		.map((s) => [s.textContent, s.style.getPropertyValue("--shiki-light").toLowerCase()]);
+
+	it("shows the text plain at once, then coloured by the file's grammar", async () => {
+		const el = document.createElement("nlp-code");
+		el.path = "output/final.tree";
+		el.text = "_ROOT [0,11]\n   _greeting [0,10]";
+		document.body.append(el);
+		expect(el.querySelector("pre")?.textContent).toBe("_ROOT [0,11]\n   _greeting [0,10]");
+		expect(await until(() => !!el.querySelector(".coloured"))).toBe(true);
+		expect(el.querySelector("pre")?.textContent).toBe("_ROOT [0,11]\n   _greeting [0,10]");
+		// The extension's own tree colours, not the stock theme's: offsets blue.
+		expect(colours(el)).toContainEqual(["0", "#5596f0"]);
+	}, 20000);
+	it("leaves a file that is not NLP++ plain, and never reads the text as HTML", async () => {
+		const el = document.createElement("nlp-code");
+		el.path = "notes.md";
+		el.text = "<b>not bold</b>";
+		document.body.append(el);
+		await new Promise((r) => setTimeout(r, 300));
+		expect(el.querySelector(".coloured")).toBeNull();
+		expect(el.querySelector("b")).toBeNull();
+		expect(el.textContent).toBe("<b>not bold</b>");
+	});
+	it("takes its grammar from the language attribute over the path", async () => {
+		const el = document.createElement("nlp-code");
+		el.setAttribute("language", "nlp");
+		el.path = "notes.md";
+		el.text = "@CODE\nL(\"x\") = 1;\n@@CODE";
+		document.body.append(el);
+		expect(el.language).toBe("nlp");
+		expect(await until(() => !!el.querySelector(".coloured"))).toBe(true);
+	}, 20000);
+});

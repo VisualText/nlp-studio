@@ -1,8 +1,8 @@
 {
   "name": "@visualtext/analyzer-views",
   "private": true,
-  "version": "0.1.0",
-  "description": "An NLP++ analyzer's sequence and knowledge base, listed as the NLP++ extension for VS Code lists them, for any web page.",
+  "version": "0.2.0",
+  "description": "An NLP++ analyzer's sequence, knowledge base, run results and code, shown the way the NLP++ extension for VS Code shows them, for any web page.",
   "type": "module",
   "repository": {
     "type": "git",
@@ -26,12 +26,19 @@
   ],
   "files": [
     "dist",
-    "style.css"
+    "style.css",
+    "src/grammars/LICENSE",
+    "src/grammars/README.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
     "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@shikijs/core": "4.4.3",
+    "@shikijs/engine-javascript": "4.4.3",
+    "@shikijs/themes": "4.4.3"
   },
   "devDependencies": {
     "happy-dom": "20.14.5",

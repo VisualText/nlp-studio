@@ -15,6 +15,9 @@ export default defineConfig({
 		chunkSizeWarningLimit: 5000,
 	},
 	worker: { format: "es" },
+	// ../analyzer-views is linked, not copied, and has its own node_modules; one copy of
+	// shiki serves it and @shikijs/monaco.
+	resolve: { dedupe: ["@shikijs/core", "@shikijs/engine-javascript", "@shikijs/themes"] },
 	server: { proxy: { "/api": RUN_SERVER } },
 	preview: { proxy: { "/api": RUN_SERVER } },
 });

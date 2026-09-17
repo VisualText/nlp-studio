@@ -9,7 +9,7 @@
 // rewrites bold, offsets blue, "fired" red.
 //
 // Copied from there rule for rule, so the two can be compared, and folded into the shiki
-// themes in highlight.ts.
+// themes in highlight.ts. PURE: no DOM.
 export interface TokenRule {
 	scope: string | string[];
 	settings: { foreground?: string; fontStyle?: string };

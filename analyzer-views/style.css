@@ -54,6 +54,20 @@
 }
 
 nlp-sequence, nlp-knowledge-base, nlp-output, nlp-trees { display: block; }
+/* Code: the element scrolls when the page gives it a height; the text is never wrapped,
+   since a wrapped rule reads as two rules. */
+nlp-code { display: block; overflow: auto; }
+.nlp-code { margin: 0; font-family: var(--nlp-font); font-size: inherit; line-height: inherit;
+	white-space: pre; tab-size: 4; }
+/* Each token carries both themes' colours; the page's theme picks one. */
+.nlp-code.coloured span { color: var(--shiki-light); font-style: var(--shiki-light-font-style);
+	font-weight: var(--shiki-light-font-weight); }
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) .nlp-code.coloured span { color: var(--shiki-dark);
+		font-style: var(--shiki-dark-font-style); font-weight: var(--shiki-dark-font-weight); }
+}
+:root[data-theme="dark"] .nlp-code.coloured span { color: var(--shiki-dark);
+	font-style: var(--shiki-dark-font-style); font-weight: var(--shiki-dark-font-weight); }
 nlp-sequence[hidden], nlp-knowledge-base[hidden], nlp-output[hidden], nlp-trees[hidden] { display: none; }
 
 /* An icon, anywhere: a small square in its colour. */

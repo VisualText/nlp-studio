@@ -123,18 +123,19 @@ files the analyzer wrote, problems, and the engine's log. Its parse trees open i
   anything else), and the sequence line's comment is the mouse-over rather than a second line
   under the name — the extension's `passTooltip`, file path and all. The knowledge base, the
   input and the parse trees carry their icons too (`dict`, `kbb`, `file`, `tree`), as
-  `kbView`/`textView` give them. `src/icons.ts` holds that artwork inlined from
+  `kbView`/`textView` give them. `analyzer-views/src/icons.ts` holds that artwork inlined from
   `vscode-nlp/resources` (MIT), shapes carrying `currentColor` so one copy serves both themes
   and a switched-off pass is the same shape in grey rather than a second drawing.
 - **Tree colours are the extension's.** The grammars name scopes no stock theme knows
   (`keyword.node.tree`, `keyword.rewrite.tree`, `keyword.concept.kbb2`), which is why VS Code
   colours them through `editor.tokenColorCustomizations` in the `.vscode/settings.json` that
-  `vscode-nlp` and the analyzer repositories ship. `src/tokencolors.ts` holds those rules, rule
-  for rule, for light and for dark, and `highlight.ts` folds them into both shiki themes.
+  `vscode-nlp` and the analyzer repositories ship. `analyzer-views/src/colors.ts` holds those
+  rules, rule for rule, for light and for dark, and `analyzer-views/src/highlight.ts` folds them
+  into both shiki themes, for the editor and for `<nlp-code>` alike.
   Without them a tree is one flat keyword colour.
 - **Pass numbers are the engine's.** A switched-off pass (`/nlp name`) keeps its number and
   a folder or stub has none. That was measured, not assumed, and both the page
-  (`analyzers.ts`) and the server number `analyzer.seq` the same way.
+  (`analyzer-views/src/sequence.ts`) and the server number `analyzer.seq` the same way.
 - **Offsets.** The tree gives byte and code-point offsets. The page converts code points to
   UTF-16 before selecting text, so text beyond the Basic Multilingual Plane (emoji)
   selects correctly.
@@ -266,7 +267,8 @@ enumerate, what to show, what a double-click does — ports even though the
 | `findView.ts` | Search results |
 
 The sequence, knowledge-base and output panels live in [../analyzer-views/](../analyzer-views/) as
-web components (`<nlp-sequence>`, `<nlp-knowledge-base>`, `<nlp-output>`, `<nlp-trees>`) with
+web components (`<nlp-sequence>`, `<nlp-knowledge-base>`, `<nlp-output>`, `<nlp-trees>`, and
+`<nlp-code>` for read-only text colored with the grammars the editor uses) with
 their rules beside them, so any
 page that lists an analyzer draws it the same way and a rule -- such as listing only
 `.dict` and `.kbb` files -- is changed in one place.

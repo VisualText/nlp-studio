@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	fileIcon, fileSize, outputOrder, passComment, passIcon, passLabel, passTooltip, passes, shownInKnowledgeBase,
-	treeLabel, treeNote, treeOrder, treeTitle,
+	langFor, treeLabel, treeNote, treeOrder, treeTitle,
 } from "../src/rules.js";
 
 describe("analyzer.seq", () => {
@@ -114,5 +114,16 @@ describe("what a run wrote", () => {
 	});
 	it("says when a tree was written, and its size when known", () => {
 		expect(treeOrder(trees).map(treeNote)).toEqual(["after the last pass · 12 KB", "after pass 1", "after pass 2 · 5 KB"]);
+	});
+});
+
+describe("which grammar reads a file", () => {
+	it("goes by the file's extension, with .pat as a rule file", () => {
+		expect(["spec/kbinit.nlp", "spec/old.PAT", "spec/analyzer.seq", "kb/user/hier.kb", "kb/user/a.kbb",
+			"kb/user/b.dict", "final.tree", "input/a.txxt"].map(langFor))
+			.toEqual(["nlp", "nlp", "seq", "kb", "kbb", "dict", "tree", "txxt"]);
+	});
+	it("gives a file that is not NLP++ none", () => {
+		expect([langFor("README.md"), langFor("kb/user/.keep"), langFor(""), langFor(undefined)]).toEqual([null, null, null, null]);
 	});
 });
