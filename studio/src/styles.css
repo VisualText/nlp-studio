@@ -135,6 +135,10 @@ button.run.busy::before { content: ""; display: inline-block; width: 10px; heigh
 .run-files { max-width: 420px; --nlp-muted: var(--muted); --nlp-hover: var(--on); --nlp-selected: var(--on);
 	--nlp-selected-ink: var(--on-ink); }
 
+/* The values output.json filled: <nlp-values>, kept to a readable width in the wide panel. */
+.run-values { max-width: 640px; margin-bottom: 8px; --nlp-muted: var(--muted); --nlp-hover: var(--on); }
+.run-values .nlp-heading { margin: 2px 0 4px; }
+
 /* A run's problems and log: <nlp-log>, in the studio's colours. */
 .run-log { --nlp-muted: var(--ink); --nlp-hover: var(--on); --nlp-error: var(--error); }
 .run-log .nlp-log-lines { margin: 0; padding: 0; }

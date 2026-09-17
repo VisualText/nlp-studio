@@ -269,7 +269,7 @@ enumerate, what to show, what a double-click does — ports even though the
 The sequence, knowledge-base and output panels live in [../analyzer-views/](../analyzer-views/) as
 web components (`<nlp-sequence>`, `<nlp-knowledge-base>`, `<nlp-output>`, `<nlp-trees>`, and
 `<nlp-code>` for read-only text colored with the grammars the editor uses, `<nlp-log>` for a run's
-problems and log) with
+problems and log, `<nlp-values>` for the fields its `output.json` filled) with
 their rules beside them, so any
 page that lists an analyzer draws it the same way and a rule -- such as listing only
 `.dict` and `.kbb` files -- is changed in one place.

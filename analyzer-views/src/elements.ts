@@ -7,6 +7,7 @@
 //   <nlp-trees>           a run's parse trees: final.tree, and the tree after each pass
 //   <nlp-code>            a file's text, read-only, coloured by NLP++'s own grammars
 //   <nlp-log>             a run's problems, each opening its pass at its line, and its log
+//   <nlp-values>          the values a run's output.json filled, by field
 //
 // Give one what to list; it says when a file is picked:
 //
@@ -28,7 +29,7 @@
 //              nlp-revert { path }  its revert button was clicked
 //
 // <nlp-code> takes text, and a path or a language attribute to pick the grammar; <nlp-log>
-// takes problems and lines (see their classes).
+// takes problems and lines; <nlp-values> takes output (see their classes).
 //
 // LIGHT DOM, not a shadow root: the rows are ordinary buttons a page can style, test and
 // query (button[data-path]). style.css draws them; its --nlp-* properties theme them.
@@ -38,6 +39,7 @@ import { nlpTokens } from "./highlight.js";
 import { type IconName, fileIcon, iconElement, passIcon } from "./icons.js";
 import { type NlpLanguage, NLP_LANGUAGES, langFor } from "./languages.js";
 import { type Problem, logLines, problemWhere } from "./logs.js";
+import { type FilledField, filledFields } from "./values.js";
 import { type TreeFile, outputOrder, treeLabel, treeNote, treeOrder, treeTitle } from "./runs.js";
 import { type Pass, SEQUENCE_FILE, passes, passLabel, passTooltip } from "./sequence.js";
 
@@ -511,6 +513,82 @@ export class NlpLog extends Base {
 	}
 }
 
+// The values a run found: the fields its output.json filled, by dotted path, as a table.
+//
+//   const values = document.createElement("nlp-values");
+//   values.output = JSON.parse(outputJson);
+//
+// Heading "Values found" by default; heading="" for none. With output but nothing filled
+// it says so -- the analyzer looked and found nothing, which is an answer. With no output
+// at all it is hidden.
+export class NlpValues extends Base {
+	#output: unknown = undefined;
+	#fields: FilledField[] = [];
+
+	static observedAttributes = ["heading"];
+
+	get output(): unknown {
+		return this.#output;
+	}
+	set output(output: unknown) {
+		this.#output = output;
+		this.#fields = filledFields(output);
+		this.render();
+	}
+
+	// The filled fields, as [path, value].
+	get fields(): FilledField[] {
+		return this.#fields;
+	}
+
+	connectedCallback(): void {
+		upgradeProperties(this, ["output"]);
+		this.render();
+	}
+
+	attributeChangedCallback(): void {
+		this.render();
+	}
+
+	private render(): void {
+		if (!this.isConnected) return;
+		this.hidden = this.#output === undefined || this.#output === null;
+		const parts: HTMLElement[] = [];
+		const heading = this.getAttribute("heading") ?? "Values found";
+		if (heading) {
+			const h = document.createElement("h3");
+			h.className = "nlp-heading";
+			h.textContent = heading;
+			parts.push(h);
+		}
+		if (this.#fields.length) {
+			const table = document.createElement("table");
+			table.className = "nlp-values";
+			const head = table.createTHead().insertRow();
+			for (const title of ["Field", "Value"]) {
+				const th = document.createElement("th");
+				th.textContent = title;
+				head.append(th);
+			}
+			const body = table.createTBody();
+			for (const [path, value] of this.#fields) {
+				const row = body.insertRow();
+				const field = row.insertCell();
+				field.className = "nlp-field";
+				field.textContent = path;
+				row.insertCell().textContent = value;
+			}
+			parts.push(table);
+		} else if (!this.hidden) {
+			const note = document.createElement("p");
+			note.className = "nlp-values-empty";
+			note.textContent = "Every field is empty: the analyzer looked and found nothing it recognizes. That is an answer, not a failure.";
+			parts.push(note);
+		}
+		this.replaceChildren(...parts);
+	}
+}
+
 const ELEMENTS: [string, CustomElementConstructor][] = [
 	["nlp-sequence", NlpSequence],
 	["nlp-knowledge-base", NlpKnowledgeBase],
@@ -518,6 +596,7 @@ const ELEMENTS: [string, CustomElementConstructor][] = [
 	["nlp-trees", NlpTrees],
 	["nlp-code", NlpCode],
 	["nlp-log", NlpLog],
+	["nlp-values", NlpValues],
 ];
 
 // Registers the elements, once. The package's entry point calls it; a page that loads
@@ -537,6 +616,7 @@ declare global {
 		"nlp-trees": NlpTrees;
 		"nlp-code": NlpCode;
 		"nlp-log": NlpLog;
+		"nlp-values": NlpValues;
 	}
 	interface HTMLElementEventMap {
 		"nlp-open": CustomEvent<OpenDetail>;

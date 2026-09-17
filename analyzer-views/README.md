@@ -1,6 +1,6 @@
 # @visualtext/analyzer-views
 
-This package shows an NLP++ analyzer's pass sequence, knowledge base, run results, code and log the same way the
+This package shows an NLP++ analyzer's pass sequence, knowledge base, run results, values, code and log the same way the
 [NLP++ extension for VS Code](https://github.com/VisualText/vscode-nlp) does, on any web page.
 It works with plain DOM code, React or any other framework.
 
@@ -13,7 +13,7 @@ files.
 
 ```js
 import "@visualtext/analyzer-views/style.css";
-import "@visualtext/analyzer-views";          // defines the six <nlp-*> elements
+import "@visualtext/analyzer-views";          // defines the seven <nlp-*> elements
 
 const sequence = document.createElement("nlp-sequence");
 sequence.files = ["spec/analyzer.seq", "spec/funcs.nlp", "kb/user/hier.kb", "kb/user/colors.dict"];
@@ -35,6 +35,7 @@ sidebar.append(sequence, kb);
 | `<nlp-trees>` | A run's parse trees: `final.tree`, then the tree after each pass | Output files (trees) |
 | `<nlp-code>` | One file's text, read-only, colored by NLP++'s grammars | The editor's coloring |
 | `<nlp-log>` | A run's problems, each opening its pass at its line, then the log's lines | Logging |
+| `<nlp-values>` | The fields a run's `output.json` filled, by dotted path | (from the TEG console) |
 
 Every list element takes:
 
@@ -95,7 +96,13 @@ log.lines = errLog;
 log.addEventListener("nlp-open", (e) => openFile(e.detail.path, e.detail.line));
 ```
 
-A list element with nothing to list hides itself, and so does `<nlp-log>`. The rows are ordinary light DOM, so a page can
+`<nlp-values>` takes `output`, the parsed `output.json`, and lists the fields it filled by
+dotted path (`doc_type.document_type`). Empty strings count as not found, while `0` and `false`
+are kept. With output but nothing filled, it says so. `readOutput(text)` parses the text, or
+says why it isn't JSON.
+
+A list element with nothing to list hides itself, and so do `<nlp-log>` and `<nlp-values>`
+(when there's no output). The rows are ordinary light DOM, so a page can
 style them, query them (`button[data-path]`) and test them.
 
 **React 18** passes attributes but not properties to custom elements. Set `files`,
@@ -125,6 +132,7 @@ follow the same light and dark choice.
   extension's token colors.
 - `problemsIn`, `problemsInLog`, `problemWhere` and `logLines` read the engine's `err.log` and
   `make_ana.log`.
+- `filledFields` and `readOutput` read `output.json`.
 
 ## Develop
 

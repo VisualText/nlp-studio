@@ -4,6 +4,7 @@
 // with their icons, as the extension's OUTPUT FILES view does; clicking one opens it in the
 // editor through PanelHooks rather than dumping its text here. The file list holds the same
 // files, and the parse trees, and opens them the same way.
+import { readOutput } from "@visualtext/analyzer-views";
 import { type RunProblem, type RunResult, type RunStatus, outputFiles } from "./api";
 
 export interface PanelHooks {
@@ -91,7 +92,8 @@ export class RunPanel {
 		else this.renderLog(result.log ?? []);
 	}
 
-	// The files the run wrote, by name: click one to open it in the editor.
+	// The values output.json filled, then the files the run wrote, by name: click one to
+	// open it in the editor.
 	private renderOutput(result: RunResult): void {
 		const files = outputFiles(result);
 		if (!files.length) {
@@ -99,6 +101,18 @@ export class RunPanel {
 				? "The analyzer wrote no output files."
 				: "Nothing was written: the run did not finish."));
 			return;
+		}
+		const json = result.output?.["output.json"];
+		if (json !== undefined) {
+			const read = readOutput(json);
+			if ("error" in read) {
+				this.body.append(make("p", "note bad", read.error));
+			} else {
+				const values = document.createElement("nlp-values");
+				values.className = "run-values";
+				values.output = read.output;
+				this.body.append(values);
+			}
 		}
 		// The same list as the file list's Output (@visualtext/analyzer-views), without its heading.
 		const list = document.createElement("nlp-output");

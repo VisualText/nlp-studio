@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	fileIcon, fileSize, outputOrder, passComment, passIcon, passLabel, passTooltip, passes, shownInKnowledgeBase,
-	langFor, logLines, problemWhere, problemsInLog, treeLabel, treeNote, treeOrder, treeTitle,
+	filledFields, langFor, logLines, problemWhere, problemsInLog, readOutput, treeLabel, treeNote, treeOrder, treeTitle,
 } from "../src/rules.js";
 
 describe("analyzer.seq", () => {
@@ -152,5 +152,23 @@ describe("the engine's log", () => {
 		expect(logLines("a\r\n\n  \nb")).toEqual(["a", "b"]);
 		expect(logLines(["a", "", "b"])).toEqual(["a", "b"]);
 		expect(logLines(null)).toEqual([]);
+	});
+});
+
+describe("the values a run found", () => {
+	// The TEG console's cases, where this rule began.
+	it("are the fields the analyzer filled, by dotted path", () => {
+		expect(filledFields({ doc_type: { document_type: "i797", matched_on: "" } })).toEqual([["doc_type.document_type", "i797"]]);
+	});
+	it("go through lists, keeping 0 and false and dropping the empties", () => {
+		expect(filledFields({ a: [{ b: "x" }, { b: "" }], c: [], d: ["p", "", "q"], e: 0, f: false, g: null }))
+			.toEqual([["a[0].b", "x"], ["d", "p, q"], ["e", "0"], ["f", "false"]]);
+	});
+	it("are none without output", () => {
+		expect([filledFields(null), filledFields("")]).toEqual([[], []]);
+	});
+	it("come from output.json's text, or say why it is not JSON", () => {
+		expect(readOutput('{"greetings": 3}')).toEqual({ output: { greetings: 3 } });
+		expect("error" in readOutput("{oops")).toBe(true);
 	});
 });

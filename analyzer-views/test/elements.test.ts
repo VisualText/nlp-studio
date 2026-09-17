@@ -235,3 +235,33 @@ describe("<nlp-log>", () => {
 		expect(el.hidden).toBe(true);
 	});
 });
+
+describe("<nlp-values>", () => {
+	it("lists the filled fields by path, under its heading", () => {
+		const el = document.createElement("nlp-values");
+		el.output = { doc_type: { document_type: "i797", matched_on: "" }, count: 0 };
+		document.body.append(el);
+		expect(el.querySelector("h3")?.textContent).toBe("Values found");
+		expect([...el.querySelectorAll("tbody tr")].map((r) => [...r.querySelectorAll("td")].map((c) => c.textContent)))
+			.toEqual([["doc_type.document_type", "i797"], ["count", "0"]]);
+		expect(el.fields.length).toBe(2);
+	});
+	it("says an output with nothing filled is an answer, and hides with no output", () => {
+		const empty = document.createElement("nlp-values");
+		empty.output = { category: "" };
+		document.body.append(empty);
+		expect(empty.hidden).toBe(false);
+		expect(empty.querySelector(".nlp-values-empty")?.textContent).toContain("That is an answer");
+		const none = document.createElement("nlp-values");
+		none.output = null;
+		document.body.append(none);
+		expect(none.hidden).toBe(true);
+	});
+	it("shows values as text, never as HTML", () => {
+		const el = document.createElement("nlp-values");
+		el.output = { name: "<b>x</b>" };
+		document.body.append(el);
+		expect(el.querySelector("b")).toBeNull();
+		expect(el.querySelector("tbody td:last-child")?.textContent).toBe("<b>x</b>");
+	});
+});

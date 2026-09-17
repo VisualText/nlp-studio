@@ -60,9 +60,9 @@
 nlp-sequence, nlp-knowledge-base, nlp-output, nlp-trees { display: block; }
 /* Code: the element scrolls when the page gives it a height; the text is never wrapped,
    since a wrapped rule reads as two rules. */
-nlp-code, nlp-log { display: block; }
+nlp-code, nlp-log, nlp-values { display: block; }
 nlp-code { overflow: auto; }
-nlp-log[hidden] { display: none; }
+nlp-log[hidden], nlp-values[hidden] { display: none; }
 /* The marked line spans the code's width, and holds its height when empty. */
 .nlp-line.on { display: inline-block; min-width: 100%; min-height: 1lh; background: var(--nlp-line); }
 .nlp-code { margin: 0; font-family: var(--nlp-font); font-size: inherit; line-height: inherit;
@@ -131,3 +131,12 @@ button.nlp-problem-row:hover { background: var(--nlp-hover); }
 .nlp-message { min-width: 0; overflow-wrap: anywhere; }
 .nlp-log-lines { margin: 6px 0 0; padding: 0 6px; font-family: var(--nlp-font); font-size: 12px;
 	white-space: pre-wrap; overflow-wrap: anywhere; color: var(--nlp-muted); }
+
+/* The values a run found: field by dotted path, then its value. */
+.nlp-values { width: 100%; border-collapse: collapse; font-size: 13px; }
+.nlp-values th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+	color: var(--nlp-muted); padding: 4px 8px; }
+.nlp-values td { padding: 4px 8px; vertical-align: top; overflow-wrap: anywhere; }
+.nlp-values tbody tr:hover { background: var(--nlp-hover); }
+.nlp-field { font-family: var(--nlp-font); font-size: 12.5px; white-space: nowrap; }
+.nlp-values-empty { margin: 4px 6px; color: var(--nlp-muted); }
