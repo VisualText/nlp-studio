@@ -5,4 +5,5 @@ export * from "./files.js";
 export * from "./runs.js";
 export * from "./languages.js";
 export * from "./colors.js";
+export * from "./logs.js";
 export { type IconName, fileIcon, iconSvg, passIcon } from "./icons.js";

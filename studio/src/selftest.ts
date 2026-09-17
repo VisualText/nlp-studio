@@ -398,4 +398,13 @@ async function runChecks(studio: Studio, check: (name: string, ok: boolean, got:
 	const runMarkers = monaco.editor.getModelMarkers({ owner: RUN_MARKERS, resource: output.uri });
 	check("...and marks that line in the editor", runMarkers.some((m) => m.startLineNumber === 2),
 		runMarkers.map((m) => m.startLineNumber));
+
+	// The Problems tab is <nlp-log>: the problem is listed where it is, and opens its pass there.
+	studio.openPath("spec/funcs.nlp");
+	const where = [...document.querySelectorAll("#results nlp-log .nlp-where")].map((w) => w.textContent);
+	document.querySelector<HTMLButtonElement>('#results nlp-log button[data-path="spec/output.nlp"]')?.click();
+	check("the Problems tab lists it where it is, and clicking it opens the pass at that line",
+		where.includes("spec/output.nlp:2") && studio.currentPath === "spec/output.nlp"
+		&& studio.editor.getPosition()?.lineNumber === 2,
+		{ where, path: studio.currentPath, line: studio.editor.getPosition()?.lineNumber });
 }

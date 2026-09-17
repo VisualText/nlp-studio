@@ -8,6 +8,8 @@
      --nlp-selected-ink   its text
      --nlp-changed        the mark on a file with unsaved edits
      --nlp-font           the rows' font
+     --nlp-error          where a problem is
+     --nlp-line           the marked line in code
 
    The icon colours are the extension's own, for light and dark; each is a property too
    (--nlp-icon-dna, --nlp-icon-dict, ...). Dark follows prefers-color-scheme unless the page
@@ -20,6 +22,8 @@
 	--nlp-selected-ink: #1f4fa3;
 	--nlp-changed: #8a5a00;
 	--nlp-font: ui-monospace, "Cascadia Code", Consolas, monospace;
+	--nlp-error: #b3261e;
+	--nlp-line: rgba(255, 213, 0, .22);
 
 	/* The helix black on light, grey when the pass is switched off; the dot violet; the
 	   folder grey. */
@@ -38,7 +42,7 @@
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme="light"]) {
 		--nlp-muted: #9aa0a6; --nlp-hover: #243553; --nlp-selected: #243553; --nlp-selected-ink: #a9c7ff;
-		--nlp-changed: #fdd663;
+		--nlp-changed: #fdd663; --nlp-error: #f28b82; --nlp-line: rgba(255, 213, 0, .16);
 		/* The helix pale yellow on dark. */
 		--nlp-icon-dna: #edec81; --nlp-icon-dna-off: #939598; --nlp-icon-dot: #b5aaff; --nlp-icon-folder: #c5c5c5;
 		--nlp-icon-folder-off: #7a7a7a; --nlp-icon-dict: #00aeef; --nlp-icon-kbb: #ffe680; --nlp-icon-json: #00aeef;
@@ -47,7 +51,7 @@
 }
 :root[data-theme="dark"] {
 	--nlp-muted: #9aa0a6; --nlp-hover: #243553; --nlp-selected: #243553; --nlp-selected-ink: #a9c7ff;
-	--nlp-changed: #fdd663;
+	--nlp-changed: #fdd663; --nlp-error: #f28b82; --nlp-line: rgba(255, 213, 0, .16);
 	--nlp-icon-dna: #edec81; --nlp-icon-dna-off: #939598; --nlp-icon-dot: #b5aaff; --nlp-icon-folder: #c5c5c5;
 	--nlp-icon-folder-off: #7a7a7a; --nlp-icon-dict: #00aeef; --nlp-icon-kbb: #ffe680; --nlp-icon-json: #00aeef;
 	--nlp-icon-file: #c5c5c5; --nlp-icon-log: #e6e6e6; --nlp-icon-tree: #c5c5c5;
@@ -56,7 +60,11 @@
 nlp-sequence, nlp-knowledge-base, nlp-output, nlp-trees { display: block; }
 /* Code: the element scrolls when the page gives it a height; the text is never wrapped,
    since a wrapped rule reads as two rules. */
-nlp-code { display: block; overflow: auto; }
+nlp-code, nlp-log { display: block; }
+nlp-code { overflow: auto; }
+nlp-log[hidden] { display: none; }
+/* The marked line spans the code's width, and holds its height when empty. */
+.nlp-line.on { display: inline-block; min-width: 100%; min-height: 1lh; background: var(--nlp-line); }
 .nlp-code { margin: 0; font-family: var(--nlp-font); font-size: inherit; line-height: inherit;
 	white-space: pre; tab-size: 4; }
 /* Each token carries both themes' colours; the page's theme picks one. */
@@ -113,3 +121,13 @@ span.nlp-name { color: var(--nlp-muted); }
 	cursor: pointer; border-radius: 5px; }
 .nlp-item.changed .nlp-revert { display: inline-block; }
 .nlp-revert:hover { background: var(--nlp-hover); color: inherit; }
+
+/* A run's problems: where, then what. One that names a file opens it. */
+.nlp-problem-row { display: flex; gap: 14px; width: 100%; text-align: left; border: 0; border-radius: 5px;
+	background: none; color: inherit; font: inherit; padding: 3px 6px; }
+button.nlp-problem-row { cursor: pointer; }
+button.nlp-problem-row:hover { background: var(--nlp-hover); }
+.nlp-where { flex: none; color: var(--nlp-error); font-family: var(--nlp-font); font-size: 12.5px; white-space: nowrap; }
+.nlp-message { min-width: 0; overflow-wrap: anywhere; }
+.nlp-log-lines { margin: 6px 0 0; padding: 0 6px; font-family: var(--nlp-font); font-size: 12px;
+	white-space: pre-wrap; overflow-wrap: anywhere; color: var(--nlp-muted); }

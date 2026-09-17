@@ -183,3 +183,55 @@ describe("<nlp-code>", () => {
 		expect(await until(() => !!el.querySelector(".coloured"))).toBe(true);
 	}, 20000);
 });
+
+describe("<nlp-code> marks a line", () => {
+	it("marks the line asked for, without changing the text", () => {
+		const el = document.createElement("nlp-code");
+		el.path = "notes.md";
+		el.text = "one\ntwo\n\nfour";
+		el.line = 2;
+		document.body.append(el);
+		const lines = [...el.querySelectorAll(".nlp-line")];
+		expect(lines.map((l) => l.textContent)).toEqual(["one", "two", "", "four"]);
+		expect(lines.map((l) => l.classList.contains("on"))).toEqual([false, true, false, false]);
+		expect(el.textContent).toBe("one\ntwo\n\nfour");
+		el.line = null;
+		expect(el.querySelector(".nlp-line.on")).toBeNull();
+	});
+});
+
+describe("<nlp-log>", () => {
+	const make = () => {
+		const el = document.createElement("nlp-log");
+		el.problems = [
+			{ file: "spec/output.nlp", pass: 4, line: 2, message: "Unknown fn/action name=X" },
+			{ file: null, pass: 0, line: 0, message: "Errors in loading analyzer." },
+		];
+		el.lines = "4 2 [Unknown fn/action name=X]\n\n0 0 [Errors in loading analyzer.]";
+		document.body.append(el);
+		return el;
+	};
+
+	it("lists each problem by where it is, then the log's lines", () => {
+		const el = make();
+		expect(el.querySelector("h3")?.textContent).toBe("Log");
+		expect([...el.querySelectorAll(".nlp-where")].map((w) => w.textContent)).toEqual(["spec/output.nlp:2", "analyzer"]);
+		expect(el.querySelector(".nlp-log-lines")?.textContent)
+			.toBe("4 2 [Unknown fn/action name=X]\n0 0 [Errors in loading analyzer.]");
+	});
+	it("opens a problem's file at its line, and offers nothing to open for one without a file", () => {
+		const el = make();
+		const opened: [string, number | undefined][] = [];
+		el.addEventListener("nlp-open", (e) => opened.push([e.detail.path, e.detail.line]));
+		el.querySelector<HTMLButtonElement>('button[data-path="spec/output.nlp"]')!.click();
+		expect(opened).toEqual([["spec/output.nlp", 2]]);
+		expect(el.querySelectorAll("button.nlp-problem-row").length).toBe(1);
+	});
+	it("hides itself with nothing to show", () => {
+		const el = document.createElement("nlp-log");
+		el.problems = [];
+		el.lines = "\n";
+		document.body.append(el);
+		expect(el.hidden).toBe(true);
+	});
+});

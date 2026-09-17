@@ -6,6 +6,7 @@
 //   <nlp-output>          the files a run wrote, as its OUTPUT FILES view
 //   <nlp-trees>           a run's parse trees: final.tree, and the tree after each pass
 //   <nlp-code>            a file's text, read-only, coloured by NLP++'s own grammars
+//   <nlp-log>             a run's problems, each opening its pass at its line, and its log
 //
 // Give one what to list; it says when a file is picked:
 //
@@ -26,8 +27,8 @@
 // Events:      nlp-open   { path }  a file was clicked (a tree by its name)
 //              nlp-revert { path }  its revert button was clicked
 //
-// <nlp-code> takes text, and a path or a language attribute to pick the grammar (see its
-// class).
+// <nlp-code> takes text, and a path or a language attribute to pick the grammar; <nlp-log>
+// takes problems and lines (see their classes).
 //
 // LIGHT DOM, not a shadow root: the rows are ordinary buttons a page can style, test and
 // query (button[data-path]). style.css draws them; its --nlp-* properties theme them.
@@ -36,11 +37,13 @@ import { type AnalyzerFile, fileSize, shownInKnowledgeBase, toFile } from "./fil
 import { nlpTokens } from "./highlight.js";
 import { type IconName, fileIcon, iconElement, passIcon } from "./icons.js";
 import { type NlpLanguage, NLP_LANGUAGES, langFor } from "./languages.js";
+import { type Problem, logLines, problemWhere } from "./logs.js";
 import { type TreeFile, outputOrder, treeLabel, treeNote, treeOrder, treeTitle } from "./runs.js";
 import { type Pass, SEQUENCE_FILE, passes, passLabel, passTooltip } from "./sequence.js";
 
 export interface OpenDetail {
 	path: string;
+	line?: number;          // <nlp-log>: the line the problem is on
 }
 
 interface Row {
@@ -317,6 +320,7 @@ export class NlpTrees extends AnalyzerList {
 //   const code = document.createElement("nlp-code");
 //   code.path = "spec/funcs.nlp";      // picks the grammar; or set language="tree"
 //   code.text = source;
+//   code.line = 12;                    // marks line 12 and scrolls it into view
 //
 // The text shows plain at once, and coloured when the grammars have loaded; a file that
 // is not NLP++, or is too long to colour, stays plain. Tokens are spans with text content
@@ -324,6 +328,7 @@ export class NlpTrees extends AnalyzerList {
 export class NlpCode extends Base {
 	#text = "";
 	#path: string | null = null;
+	#line: number | null = null;
 	#drawn = 0;   // which render the tokens that arrive belong to
 
 	static observedAttributes = ["language"];
@@ -345,6 +350,15 @@ export class NlpCode extends Base {
 		this.render();
 	}
 
+	// A line to mark and bring into view, counting from 1; null for none.
+	get line(): number | null {
+		return this.#line;
+	}
+	set line(line: number | null | undefined) {
+		this.#line = line && line > 0 ? line : null;
+		this.markLine(true);
+	}
+
 	// The grammar it is coloured with: the language attribute, else the path's.
 	get language(): NlpLanguage | null {
 		const set = this.getAttribute("language");
@@ -353,7 +367,7 @@ export class NlpCode extends Base {
 	}
 
 	connectedCallback(): void {
-		upgradeProperties(this, ["text", "path"]);
+		upgradeProperties(this, ["text", "path", "line"]);
 		this.render();
 	}
 
@@ -364,28 +378,136 @@ export class NlpCode extends Base {
 	private render(): void {
 		if (!this.isConnected) return;
 		const drawn = ++this.#drawn;
-		const pre = document.createElement("pre");
-		pre.className = "nlp-code";
-		pre.textContent = this.#text;
-		this.replaceChildren(pre);
+		// One span per line, so a line can be marked; the line breaks stay text between them.
+		this.replaceChildren(this.lines(this.#text.split(/\r?\n/).map((text) => [text]), false));
+		this.markLine(true);
 		const text = this.#text;
 		nlpTokens(text, this.language).then((lines) => {
 			if (!lines || drawn !== this.#drawn) return;
-			const coloured = document.createElement("pre");
-			coloured.className = "nlp-code coloured";
-			lines.forEach((line, i) => {
-				for (const token of line) {
-					const span = document.createElement("span");
-					span.textContent = token.content;
-					for (const [prop, value] of Object.entries(token.htmlStyle ?? {})) span.style.setProperty(prop, value);
-					coloured.append(span);
-				}
-				if (i < lines.length - 1) coloured.append("\n");
-			});
-			this.replaceChildren(coloured);
+			this.replaceChildren(this.lines(lines.map((line) => line.map((token) => {
+				const span = document.createElement("span");
+				span.textContent = token.content;
+				for (const [prop, value] of Object.entries(token.htmlStyle ?? {})) span.style.setProperty(prop, value);
+				return span;
+			})), true));
+			this.markLine(false);
 		}).catch(() => {
 			// The plain text stays, and is still right.
 		});
+	}
+
+	private lines(lines: (string | Node)[][], coloured: boolean): HTMLPreElement {
+		const pre = document.createElement("pre");
+		pre.className = coloured ? "nlp-code coloured" : "nlp-code";
+		lines.forEach((parts, i) => {
+			const line = document.createElement("span");
+			line.className = "nlp-line";
+			line.append(...parts);
+			pre.append(line);
+			if (i < lines.length - 1) pre.append("\n");
+		});
+		return pre;
+	}
+
+	// Mark the line, and bring it into view when it was just asked for.
+	private markLine(reveal: boolean): void {
+		const lines = this.querySelectorAll<HTMLElement>(".nlp-line");
+		lines.forEach((line, i) => line.classList.toggle("on", i + 1 === this.#line));
+		const on = this.#line ? lines[this.#line - 1] : undefined;
+		if (on && reveal) on.scrollIntoView?.({ block: "center" });
+	}
+}
+
+// A run's problems and its log, as the extension's LOGGING view: each problem names where
+// it is and says what went wrong, and opens its pass at its line when the pass has a file.
+//
+//   const log = document.createElement("nlp-log");
+//   log.problems = problemsInLog(errLog, seqText, paths);   // or a run server's problems
+//   log.lines = errLog;                                      // the log itself, under them
+//   log.addEventListener("nlp-open", (e) => open(e.detail.path, e.detail.line));
+//
+// Heading "Log" by default; heading="" for none. Hidden with nothing to show.
+export class NlpLog extends Base {
+	#problems: Problem[] = [];
+	#lines: string[] = [];
+
+	static observedAttributes = ["heading"];
+
+	get problems(): Problem[] {
+		return this.#problems;
+	}
+	set problems(problems: Iterable<Problem> | null | undefined) {
+		this.#problems = [...(problems ?? [])];
+		this.render();
+	}
+
+	// The log's lines: an array, or its text.
+	get lines(): string[] {
+		return this.#lines;
+	}
+	set lines(lines: string | readonly string[] | null | undefined) {
+		this.#lines = logLines(lines);
+		this.render();
+	}
+
+	connectedCallback(): void {
+		upgradeProperties(this, ["problems", "lines"]);
+		this.render();
+	}
+
+	attributeChangedCallback(): void {
+		this.render();
+	}
+
+	private render(): void {
+		if (!this.isConnected) return;
+		this.hidden = this.#problems.length === 0 && this.#lines.length === 0;
+		const parts: HTMLElement[] = [];
+		const heading = this.getAttribute("heading") ?? "Log";
+		if (heading) {
+			const h = document.createElement("h3");
+			h.className = "nlp-heading";
+			h.textContent = heading;
+			parts.push(h);
+		}
+		if (this.#problems.length) {
+			const list = document.createElement("ol");
+			list.className = "nlp-list nlp-problems";
+			for (const problem of this.#problems) list.append(this.problem(problem));
+			parts.push(list);
+		}
+		if (this.#lines.length) {
+			const pre = document.createElement("pre");
+			pre.className = "nlp-log-lines";
+			pre.textContent = this.#lines.join("\n");
+			parts.push(pre);
+		}
+		this.replaceChildren(...parts);
+	}
+
+	private problem(problem: Problem): HTMLLIElement {
+		const li = document.createElement("li");
+		li.className = "nlp-item nlp-problem";
+		const row = document.createElement(problem.file ? "button" : "div");
+		row.className = "nlp-problem-row";
+		const where = document.createElement("span");
+		where.className = "nlp-where";
+		where.textContent = problemWhere(problem);
+		const message = document.createElement("span");
+		message.className = "nlp-message";
+		message.textContent = problem.message;
+		row.append(where, message);
+		const file = problem.file;
+		if (file && row instanceof HTMLButtonElement) {
+			row.type = "button";
+			row.dataset.path = file;
+			row.title = `Open ${file} at line ${problem.line}`;
+			const line = Math.max(1, problem.line);
+			row.addEventListener("click", () => this.dispatchEvent(new CustomEvent<OpenDetail>("nlp-open",
+				{ detail: { path: file, line }, bubbles: true, composed: true })));
+		}
+		li.append(row);
+		return li;
 	}
 }
 
@@ -395,6 +517,7 @@ const ELEMENTS: [string, CustomElementConstructor][] = [
 	["nlp-output", NlpOutput],
 	["nlp-trees", NlpTrees],
 	["nlp-code", NlpCode],
+	["nlp-log", NlpLog],
 ];
 
 // Registers the elements, once. The package's entry point calls it; a page that loads
@@ -413,6 +536,7 @@ declare global {
 		"nlp-output": NlpOutput;
 		"nlp-trees": NlpTrees;
 		"nlp-code": NlpCode;
+		"nlp-log": NlpLog;
 	}
 	interface HTMLElementEventMap {
 		"nlp-open": CustomEvent<OpenDetail>;
