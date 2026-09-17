@@ -312,6 +312,9 @@ async function runChecks(studio: Studio, check: (name: string, ok: boolean, got:
 	studio.panel.showTab("output");
 	const inPanel = [...document.querySelectorAll<HTMLElement>("#results nlp-output button[data-path]")].map((b) => b.dataset.path!);
 	check("the Output tab lists the files the run wrote", inPanel.includes("output.json"), inPanel);
+	const values = [...document.querySelectorAll("#results nlp-values tbody tr")]
+		.map((r) => [...r.querySelectorAll("td")].map((c) => c.textContent));
+	check("...under the values output.json filled", JSON.stringify(values) === '[["greetings","3"]]', values);
 	document.querySelector<HTMLButtonElement>('#results nlp-output button[data-path="output.json"]')?.click();
 	check("...and clicking one there opens it in the editor", studio.currentOutput === "output.json", studio.currentOutput);
 
