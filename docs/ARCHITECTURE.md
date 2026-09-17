@@ -114,9 +114,18 @@ files the analyzer wrote, problems, and the engine's log. Its parse trees open i
   the result. The server moves a run's trees aside (`trees.py`: for the person who ran it, for
   30 minutes, the newest 20 runs and 256 MB) and the page lists them; opening one fetches it
   (`GET /api/run/tree`) into a read-only editor document in the `tree` language. **Debug**
-  runs the engine in its develop mode, which also writes `output/ana###.tree` after every
-  pass. Each tree node carries the pass and rule line that built it, so hover shows a node's
-  text and go to definition opens its rule (`run/treeview.ts`).
+  runs the engine in its develop mode (`-DEV`), which also writes `output/ana###.tree` after
+  every pass. Each tree node carries the pass and rule line that built it, so hover shows a
+  node's text and go to definition opens its rule (`run/treeview.ts`).
+- **A debug run puts two buttons on every pass.** The sequence shows, on each pass the run
+  kept a tree for, that tree and what the pass's rules matched — the two inline commands the
+  extension's sequence view offers when a pass has a log. The matches are not a file the
+  engine writes: the extension derives them from the pass's tree, and so does
+  `ruleMatches()` in `analyzer-views/src/matches.ts` — every node the tree marks `fired`, put
+  back over the input as `<<<built>>>` and `((( matched )))`, which is the `.txxt` grammar's
+  own markup and so colours like one. Deriving it in the browser is why no page and no
+  server had to learn a new artifact: a page that can fetch the pass's tree can show its
+  matches.
 - **The file list follows the extension's sequence view.** The section is "Analyzer Sequence",
   each pass carries the icon `sequenceView.ts` would give it (the DNA helix for a rule pass,
   grey when it is switched off, a pink-headed helix for a recursive one, a folder, a dot for

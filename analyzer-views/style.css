@@ -38,6 +38,7 @@
 	--nlp-icon-file: #424242;
 	--nlp-icon-log: #424242;
 	--nlp-icon-tree: #424242;
+	--nlp-icon-matches: #424242;
 }
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme="light"]) {
@@ -47,6 +48,7 @@
 		--nlp-icon-dna: #edec81; --nlp-icon-dna-off: #939598; --nlp-icon-dot: #b5aaff; --nlp-icon-folder: #c5c5c5;
 		--nlp-icon-folder-off: #7a7a7a; --nlp-icon-dict: #00aeef; --nlp-icon-kbb: #ffe680; --nlp-icon-json: #00aeef;
 		--nlp-icon-file: #c5c5c5; --nlp-icon-log: #e6e6e6; --nlp-icon-tree: #c5c5c5;
+		--nlp-icon-matches: #c5c5c5;
 	}
 }
 :root[data-theme="dark"] {
@@ -54,7 +56,7 @@
 	--nlp-changed: #fdd663; --nlp-error: #f28b82; --nlp-line: rgba(255, 213, 0, .16);
 	--nlp-icon-dna: #edec81; --nlp-icon-dna-off: #939598; --nlp-icon-dot: #b5aaff; --nlp-icon-folder: #c5c5c5;
 	--nlp-icon-folder-off: #7a7a7a; --nlp-icon-dict: #00aeef; --nlp-icon-kbb: #ffe680; --nlp-icon-json: #00aeef;
-	--nlp-icon-file: #c5c5c5; --nlp-icon-log: #e6e6e6; --nlp-icon-tree: #c5c5c5;
+	--nlp-icon-file: #c5c5c5; --nlp-icon-log: #e6e6e6; --nlp-icon-tree: #c5c5c5; --nlp-icon-matches: #c5c5c5;
 }
 
 nlp-sequence, nlp-knowledge-base, nlp-output, nlp-trees { display: block; }
@@ -93,6 +95,7 @@ nlp-sequence[hidden], nlp-knowledge-base[hidden], nlp-output[hidden], nlp-trees[
 .nlp-icon.file { color: var(--nlp-icon-file); }
 .nlp-icon.log { color: var(--nlp-icon-log); }
 .nlp-icon.tree { color: var(--nlp-icon-tree); }
+.nlp-icon.matches { color: var(--nlp-icon-matches); }
 
 .nlp-heading { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--nlp-muted);
 	margin: 12px 4px 4px; }
@@ -114,6 +117,14 @@ span.nlp-name { color: var(--nlp-muted); }
 .nlp-note { color: var(--nlp-muted); padding: 0 6px 2px 24px; font-size: 11.5px; }
 .nlp-item.skipped .nlp-note { padding-left: 4px; }
 .nlp-size { flex: none; font-size: 11.5px; color: var(--nlp-muted); padding: 0 4px; }
+
+/* What a -DEV run left on a pass: its parse tree, and what its rules matched. Faint until
+   the row is under the mouse, since they sit on every pass a debug run wrote a tree for. */
+.nlp-act { flex: none; display: inline-flex; align-items: center; border: 0; background: none; cursor: pointer;
+	padding: 3px 4px; border-radius: 5px; color: var(--nlp-muted); opacity: .55; }
+.nlp-row:hover .nlp-act, .nlp-act:focus-visible { opacity: 1; }
+.nlp-act:hover { background: var(--nlp-hover); }
+.nlp-act .nlp-icon { color: inherit; }
 
 /* A changed file: a mark after its name, and its revert button. */
 .nlp-item.changed button.nlp-name::after { content: " ●"; color: var(--nlp-changed); }

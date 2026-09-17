@@ -10,7 +10,8 @@
 // both themes and the greyed state is the same shape rather than a second drawing.
 
 export type IconName =
-	"dna" | "dna-off" | "dnar" | "dot" | "folder" | "folder-off" | "dict" | "kbb" | "file" | "tree" | "json" | "log" | "blank";
+	"dna" | "dna-off" | "dnar" | "dot" | "folder" | "folder-off" | "dict" | "kbb" | "file" | "tree" | "matches"
+	| "json" | "log" | "blank";
 
 // dna.svg: the double helix, drawn as two strands.
 const HELIX = `<path fill="currentColor" d="M1.3,0c0,1.1,0.4,2.3,1.1,3.1c0.8,0.9,1.8,1.7,2.9,2.4C6.5,6.3,7.8,7.1,9.1,8c0.8,0.6,1.6,1.3,2.2,2.1c0.7,0.9,1.1,2.1,1.2,3.3c0,0.1,0,0.3,0,0.4h-1.2l-0.1-0.9c0-0.3-0.1-0.4-0.4-0.4H2.2l0.5-1c0.1-0.2,0.3-0.3,0.4-0.2h7.5l-0.9-1C9.7,10.1,9.5,10,9.3,10H4.1V9.9c0.5-0.3,1-0.7,1.4-1C5.7,8.8,5.9,8.8,6,8.8h1.7H8c-0.6-0.4-1.1-0.7-1.6-1C6.3,7.7,6.2,7.7,6.1,7.7C5.4,8.1,4.8,8.5,4.2,8.9c-0.8,0.5-1.4,1.2-2,1.9c-0.7,0.8-1,1.9-1,2.9H0c0.1-0.7,0.2-1.3,0.4-2C0.9,10.3,1.8,9.1,3,8.3c0.7-0.5,1.3-1,2-1.4C4.9,6.8,4.8,6.7,4.7,6.7C3.8,6,2.9,5.4,2.1,4.7C0.8,3.5,0,1.8,0,0H1.3z"/><path fill="currentColor" d="M12.5,0c0,1.2-0.4,2.4-1.1,3.4c-0.6,0.8-1.2,1.5-2,2.1C9,5.8,8.6,6.1,8.2,6.4c-0.1,0.1-0.3,0.1-0.4,0C7.5,6.2,7.2,6,6.9,5.8L8,5.1V5C7.4,5,6.8,5,6.3,5c-0.4,0-0.7-0.1-1-0.3C4.9,4.4,4.5,4.1,4.1,3.8V3.7h5.2c0.2,0,0.4-0.1,0.5-0.2c0.3-0.3,0.5-0.6,0.8-1V2.4H3.2C3,2.5,2.8,2.4,2.7,2.2l-0.5-1h8.6c0.3,0,0.4-0.1,0.4-0.4s0-0.6,0.1-0.9L12.5,0z"/>`;
@@ -36,6 +37,8 @@ const SVG: Record<Exclude<IconName, "blank">, string> = {
 	kbb: `<svg viewBox="0 0 487.57 507.95" aria-hidden="true"><path fill="currentColor" d="M486.05,154.02c-14.7-87.03-103.88-131.96-167.27-147.38S184.91,2.11,133.46,44.72c-51.45,42.61-43.27,141.43-43.27,141.43L0,333.9h99.93c.32,0,.61,72.52.61,72.52,0,0-8.52,46.89,12.79,47.14s92.46,3.63,92.46,3.63l2.76,50.77,196.6-.91-.92-174.05s96.52-91.95,81.83-178.98h-.01ZM157.34,245.24c-16.38,0-29.66-13.28-29.66-29.66s13.28-29.66,29.66-29.66,29.66,13.28,29.66,29.66-13.28,29.66-29.66,29.66Z"/></svg>`,
 	// file.svg
 	file: `<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M10.57 1.14L13.85 4.44L14 4.8V14.5L13.5 15H2.5L2 14.5V1.5L2.5 1H10.22L10.57 1.14ZM10 5H13L10 2V5ZM3 2V14H13V6H9.5L9 5.5V2H3ZM11 7H5V8H11V7ZM5 9H11V10H5V9ZM11 11H5V12H11V11Z"/></svg>`,
+	// symbol-keyword.svg: the lines of text the extension's "Display Matched Rules" opens.
+	matches: `<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M15 4H10V3H15V4ZM14 7H12V8H14V7ZM10 7H1V8H10V7ZM12 13H1V14H12V13ZM7 10H1V11H7V10ZM15 10H10V11H15V10ZM8 2V5H1V2H8ZM7 3H2V4H7V3Z"/></svg>`,
 	// tree.svg: the branching parse tree.
 	tree: `<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M2.3,11.6L1.5,11l6.4-9.5L8.8,2L2.3,11.6z"/><path fill="currentColor" d="M5.4,14.1l-0.8-0.6l2.9-4.2l0.8,0.6L5.4,14.1z"/><path fill="currentColor" d="M7.6,2l0.8-0.6l6.4,9.5L14,11.6L7.6,2z"/><path fill="currentColor" d="M5.1,5.9l0.8-0.6l5.5,8.1L10.6,14L5.1,5.9z"/></svg>`,
 	// json.svg: the pair of braces.

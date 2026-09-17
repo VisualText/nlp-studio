@@ -19,7 +19,8 @@
 // Properties:  files      paths, or { path, bytes } to show sizes (all but <nlp-trees>)
 //              sequence   the text of spec/analyzer.seq (<nlp-sequence>)
 //              trees      { name, pass, passName, bytes } and skipped, names too large
-//                         to keep (<nlp-trees>)
+//                         to keep (<nlp-trees>); on <nlp-sequence>, the trees a -DEV run
+//                         wrote, which put a tree and a rule-matches button on their pass
 //              selected   the path open now, drawn as selected
 //              changed    paths with unsaved edits, marked, with a revert button when
 //                         the element has the `revertable` attribute
@@ -27,6 +28,10 @@
 //              revertable offer a revert button on a changed file
 // Events:      nlp-open   { path }  a file was clicked (a tree by its name)
 //              nlp-revert { path }  its revert button was clicked
+//              nlp-open-tree, nlp-open-matches  { path, pass }  a pass's tree, or what its
+//                         rules matched, was asked for: the tree file's name and its pass.
+//                         The page fetches that tree; ruleMatches() (matches.ts) turns it
+//                         into the marked-up text.
 //
 // <nlp-code> takes text, and a path or a language attribute to pick the grammar; <nlp-log>
 // takes problems and lines; <nlp-values> takes output (see their classes).
@@ -46,6 +51,15 @@ import { type Pass, SEQUENCE_FILE, passes, passLabel, passTooltip } from "./sequ
 export interface OpenDetail {
 	path: string;
 	line?: number;          // <nlp-log>: the line the problem is on
+	pass?: number;          // <nlp-sequence>: the pass whose tree or matches were asked for
+}
+
+// A button after a row's name: the tree a pass wrote, and what its rules matched.
+interface RowAction {
+	event: "nlp-open-tree" | "nlp-open-matches";
+	icon: IconName;
+	title: string;
+	detail: OpenDetail;
 }
 
 interface Row {
@@ -56,6 +70,7 @@ interface Row {
 	size?: string;
 	note?: string;          // a line under the name
 	classes?: string[];
+	actions?: RowAction[];
 }
 
 // A property set on an element before it was defined sits on the instance and hides the
@@ -155,6 +170,17 @@ abstract class AnalyzerList extends Base {
 			size.textContent = row.size;
 			line.append(size);
 		}
+		for (const action of row.actions ?? []) {
+			const button = document.createElement("button");
+			button.type = "button";
+			button.className = `nlp-act ${action.icon}`;
+			button.title = action.title;
+			button.setAttribute("aria-label", action.title);
+			button.append(iconElement(action.icon));
+			button.addEventListener("click", () => this.dispatchEvent(
+				new CustomEvent<OpenDetail>(action.event, { detail: action.detail, bubbles: true, composed: true })));
+			line.append(button);
+		}
 		const path = row.path;
 		if (path && name instanceof HTMLButtonElement) {
 			name.type = "button";
@@ -207,6 +233,7 @@ abstract class FileList extends AnalyzerList {
 export class NlpSequence extends FileList {
 	#sequence = "";
 	#passes: Pass[] | null = null;
+	#trees = new Map<number, TreeFile>();
 
 	protected readonly defaultHeading = "Analyzer Sequence";
 
@@ -217,6 +244,21 @@ export class NlpSequence extends FileList {
 	set sequence(text: string | null | undefined) {
 		this.#sequence = text ?? "";
 		this.#passes = null;
+		this.render();
+	}
+
+	// The trees a run kept, one per pass -- what the engine writes with -DEV on (the
+	// studio's Debug, the console's Log files). A pass with one gets two buttons: its
+	// tree, and what its rules matched. final.tree belongs to no pass and is ignored
+	// here; <nlp-trees> lists it.
+	get trees(): TreeFile[] {
+		return [...this.#trees.values()];
+	}
+	set trees(trees: Iterable<TreeFile> | null | undefined) {
+		this.#trees = new Map();
+		for (const tree of trees ?? []) {
+			if (tree.pass !== null && tree.pass !== undefined) this.#trees.set(tree.pass, tree);
+		}
 		this.render();
 	}
 
@@ -244,9 +286,22 @@ export class NlpSequence extends FileList {
 				icon: passIcon(p.kind, p.active),
 				title: p.active ? says : `${says} — switched off`,
 				classes,
+				actions: this.actions(p),
 			});
 		}
 		return rows;
+	}
+
+	// The tree the run wrote after this pass, and the text it matched in it.
+	private actions(pass: Pass): RowAction[] {
+		const tree = pass.n === null ? undefined : this.#trees.get(pass.n);
+		if (!tree) return [];
+		const detail: OpenDetail = { path: tree.name, pass: pass.n! };
+		const what = `pass ${pass.n} (${passLabel(pass)})`;
+		return [
+			{ event: "nlp-open-tree", icon: "tree", title: `Open the parse tree after ${what}`, detail },
+			{ event: "nlp-open-matches", icon: "matches", title: `Open what ${what} matched in the text`, detail },
+		];
 	}
 }
 
@@ -621,5 +676,7 @@ declare global {
 	interface HTMLElementEventMap {
 		"nlp-open": CustomEvent<OpenDetail>;
 		"nlp-revert": CustomEvent<OpenDetail>;
+		"nlp-open-tree": CustomEvent<OpenDetail>;
+		"nlp-open-matches": CustomEvent<OpenDetail>;
 	}
 }

@@ -391,6 +391,22 @@ async function runChecks(studio: Studio, check: (name: string, ok: boolean, got:
 		!!afterOne?.includes("world [") && !afterOne.includes("_greeting") && !!afterThree?.includes("_greeting"),
 		{ afterOne: afterOne?.slice(0, 200), afterThree: afterThree?.length, path: document.getElementById("path")?.textContent });
 
+	// The sequence's own buttons, which a Debug run puts on every pass it kept a tree for:
+	// that tree, and what the pass's rules matched in the input.
+	progress("opening what a pass matched");
+	const acts = (kind: string) =>
+		[...document.querySelectorAll<HTMLButtonElement>(`#files nlp-sequence .nlp-act.${kind}`)];
+	check("with Debug, each pass in the sequence offers its tree and its rule matches",
+		acts("tree").length === 4 && acts("matches").length === 4,
+		{ trees: acts("tree").length, matches: acts("matches").length });
+	acts("matches").find((b) => b.title.includes("pass 3"))?.click();
+	const matched = await until(() => studio.editor.getModel(), (m) => m?.getLanguageId() === "txxt");
+	const marked = matched?.getValue() ?? "";
+	// greeting builds _greeting over each greeting, and builds nothing around "there".
+	check("...and the rule matches open as the input with what the pass built marked",
+		studio.currentMatches === "ana003.txxt" && marked.startsWith("<<<hello world>>>") && marked.includes("there"),
+		{ matches: studio.currentMatches, language: matched?.getLanguageId(), marked: marked.slice(0, 120) });
+
 	studio.openPath("spec/output.nlp");
 	const output = studio.editor.getModel()!;
 	output.setValue("@CODE\nNoSuchFunction(1);\n@@CODE\n");
