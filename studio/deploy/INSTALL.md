@@ -5,7 +5,7 @@ second container beside the phase-1 editor, on the same host name.
 
 ```
   nginx :443
-     ├── /studio/  ->  127.0.0.1:3001   nlp-studio-app   (this directory)
+     ├── /studio/  ->  127.0.0.1:3002   nlp-studio-app   (this directory)
      │                 the site's password, or GitHub sign-in (nginx-app-*.conf)
      └── /         ->  127.0.0.1:3000   nlp-studio       (stopgap/, the site's password)
 ```
@@ -60,19 +60,23 @@ starting anything it runs [smoke-test.sh](smoke-test.sh) on port 3998, under the
 restrictions as the live container: the sample analyzer must run to its known output,
 `system()` must be refused, and a run must fail to write outside `/tmp`. Then:
 
-    curl -s http://127.0.0.1:3001/api/health
+    curl -s http://127.0.0.1:3002/api/health
     # {"ok": true, "engine": "2.2.38", ..., "signIn": false, "github": false}
 
 Nothing is public yet: the container listens on loopback only.
 
-The container runs with `network_mode: host`, so port 3001 has to be free before it
+The container runs with `network_mode: host`, so port 3002 has to be free before it
 starts — nothing warns you if another service already answers there, and the health
 check above would be that service's answer rather than the studio's. Check first:
 
-    ss -ltnp | grep ':3001 ' || echo "3001 is free"
+    ss -ltnp | grep ':3002 ' || echo "3002 is free"
 
 If something else holds it, give the app another port in `docker-compose.yml` (the
-`--port` in its `command`) and in the nginx `proxy_pass`; the two must agree.
+`--port` in its `command`), `update.sh` (`HEALTH_URL`) and the nginx `proxy_pass`; they
+must agree.
+
+It was 3001 until another account on this host started a service there, bound to every
+interface. That service is not this deployment's to move, so the app moved to 3002.
 
 ### 3. Route /studio/ in nginx, behind the password — as root
 
@@ -164,7 +168,7 @@ all the sign-in settings are there.
 ### 4. Restart the app with them — as visualtext
 
     docker compose -f /home/visualtext/nlp-studio/studio/deploy/docker-compose.yml up -d
-    curl -s http://127.0.0.1:3001/api/health
+    curl -s http://127.0.0.1:3002/api/health
     # ..., "signIn": true, "github": true}
 
 `"signIn": true` is the only answer to go on with. If the container is not running, its
@@ -277,7 +281,7 @@ Logs go to `stopgap/logs/update-app-YYYY-MM.log`.
 
     docker image inspect nlp-studio:app --format '{{json .Config.Labels}}'
     docker logs --tail 50 nlp-studio-app
-    curl -s http://127.0.0.1:3001/api/health
+    curl -s http://127.0.0.1:3002/api/health
 
 ## Rolling back
 
