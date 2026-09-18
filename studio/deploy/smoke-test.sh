@@ -59,6 +59,16 @@ index="$(curl -s "$BASE/analyzers/index.json")"
 echo "$index" | grep -q '"hello-studio"' || fail "analyzers/index.json does not list hello-studio"
 echo "  page and analyzer list: ok ($(echo "$index" | grep -c '"origin"') analyzers)"
 
+# The try page (try/index.html) and the analyzers baked in for it. They are what the
+# page can run, so an image that lost them would serve an empty picker.
+curl -s "$BASE/try/" | grep -q '<title>Try an analyzer' || fail "/try/ is not the try page"
+try_index="$(curl -s "$BASE/try/analyzers/index.json")"
+try_count="$(echo "$try_index" | grep -c '"pinned"')"
+[ "$try_count" -gt 0 ] || fail "try/analyzers/index.json lists no analyzers"
+echo "$try_index" | grep -qE '"(release|commit)": "[^n]' \
+    || fail "the try analyzers say no release or commit they came from"
+echo "  try page and its analyzers: ok ($try_count analyzers)"
+
 # The runs, from inside the container as its own user, so the sample's files come
 # from the image that is being tested.
 docker exec -i "$NAME" python - "$PORT" <<'PY' || fail "runs"
@@ -92,6 +102,39 @@ r = run({"spec/output.nlp": f'@CODE\nL("f") = openfile("{target}");\nL("f") << "
 if os.path.exists(target):
     sys.exit("a run wrote outside its temporary folder")
 print(f"  a run cannot write to /app: ok (that run: {r['status']})")
+PY
+
+# The try page's own path: one of VisualText's analyzers, run in debug mode, keeps a
+# tree after every pass, and each of those trees can be fetched back. That is what puts
+# the two icons on a pass, so if this breaks the page loses the feature silently.
+docker exec -i "$NAME" python - "$PORT" <<'PY' || fail "try-page run"
+import json, pathlib, sys, urllib.parse, urllib.request
+
+base = f"http://127.0.0.1:{sys.argv[1]}"
+index = json.load(urllib.request.urlopen(f"{base}/try/analyzers/index.json", timeout=30))["analyzers"]
+entry = min(index, key=lambda a: len(a["files"]))          # the quickest one to run
+root = pathlib.Path("dist/try/analyzers") / entry["name"]
+files = {f: (root / f).read_text(encoding="utf-8", errors="replace") for f in entry["files"]}
+text = files.get(entry["input"], "")
+
+body = json.dumps({"files": files, "text": text, "develop": True}).encode("utf-8")
+req = urllib.request.Request(base + "/api/run", data=body, headers={"Content-Type": "application/json"})
+with urllib.request.urlopen(req, timeout=120) as res:
+    r = json.load(res)
+if r["status"] != "ok":
+    sys.exit(f"{entry['name']} did not run: {json.dumps(r)[:600]}")
+
+trees = r.get("trees") or {}
+per_pass = [t for t in trees.get("files", []) if t["pass"] is not None]
+if not per_pass:
+    sys.exit(f"a debug run kept no per-pass tree: {json.dumps(trees)[:400]}")
+
+name = per_pass[0]["name"]
+query = urllib.parse.urlencode({"run": trees["run"], "name": name})
+tree = urllib.request.urlopen(f"{base}/api/run/tree?{query}", timeout=30).read().decode("utf-8", "replace")
+if not tree.strip():
+    sys.exit(f"{name} came back empty")
+print(f"  try run: ok, {entry['name']} in {r['ms']} ms, {len(per_pass)} pass trees, {name} fetched")
 PY
 
 echo "smoke-test: PASS"

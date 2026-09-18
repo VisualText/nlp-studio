@@ -13,6 +13,11 @@ stopgap/vsix/
 # analyzer-templates checkout, which has no license to commit it under.
 studio/public/analyzers/
 
+# The try page's analyzers as it fetches them -- written by
+# studio/scripts/copy-analyzers.mjs at build time from a VisualText/analyzers
+# release. Build output, and a second copy of another repository besides.
+studio/public/try/
+
 __pycache__/
 .venv/
 

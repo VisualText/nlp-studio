@@ -12,6 +12,7 @@ see the parse tree — with no install, no C++ toolchain, and no VS Code.
 |---|---|---|
 | **1. Stopgap** | `openvscode-server` container with the real `dehilster.nlp` extension baked in | **in this repo** — see [stopgap/](stopgap/) |
 | **2. Studio** | Purpose-built web app: Monaco front end + an API server running the engine | **live** — in [studio/](studio/): the editor, the run server, analyzers opened from GitHub and committed back, deployed at studio.visualtext.org/studio/ for invited people |
+| **2b. Try page** | A read-only page at `/try/`: run VisualText's own analyzers on your own text, with no install and no account | **in this repo** — see [docs/TRY-PAGE.md](docs/TRY-PAGE.md) |
 | **Shared views** | `@visualtext/analyzer-views`: the sequence, knowledge base, output files, parse trees, code, log and values as web components, for the studio and any other page that shows an analyzer | **released** — see [analyzer-views/](analyzer-views/) |
 | **3. Client-side** | Emscripten/WASM build of the engine for zero-server demos | speculative |
 
@@ -93,6 +94,30 @@ with no sign-in — never on a server anyone else can reach.
 Deploying beside the phase-1 editor, at studio.visualtext.org/studio/ — behind the site's
 password, or with GitHub sign-in for invited people:
 [studio/deploy/INSTALL.md](studio/deploy/INSTALL.md).
+
+## Trying an analyzer, without an account (`/try/`)
+
+The same build serves a second page at `/try/`: pick one of VisualText's own analyzers, type
+text, press **Run**, and see the passes, the knowledge base, what the run wrote and the parse
+trees — with each pass's own tree and matched rules when **Log files** is on. It is drawn with
+the same `@visualtext/analyzer-views` elements as the editor, and loads no Monaco.
+
+It is read-only. The analyzers are copied in when the site is built, from a pinned
+[`VisualText/analyzers`](https://github.com/VisualText/analyzers) release, and the only thing
+a visitor supplies is the text. That is what lets this page be opened to people who are not
+invited while the editor is not — **the visitor never supplies code**. It is also a promise
+the page has to keep: accepting a pasted grammar would put it back behind the sandbox that
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#the-run-server-is-not-a-sandbox) describes as not
+built.
+
+```bash
+cd studio
+VISUALTEXT_ANALYZERS=../../analyzers npm run analyzers   # write the catalog
+npm run dev                                              # http://localhost:5173/try/
+```
+
+[docs/TRY-PAGE.md](docs/TRY-PAGE.md) has which analyzers it offers and why, which ones are
+left out and why, how the catalog is built, and what to watch for when changing it.
 
 ## Quick start (phase 1)
 

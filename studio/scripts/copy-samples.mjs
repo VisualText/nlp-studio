@@ -15,10 +15,14 @@
 //
 // Output: public/analyzers/<slug>/... and public/analyzers/index.json. Only
 // spec/, kb/ and input/ travel, never output/, tmp/ or an engine run's *_log/.
+// What travels and how it is copied is scripts/analyzer-files.mjs, shared with
+// copy-analyzers.mjs.
 
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { copyAnalyzer, slug } from "./analyzer-files.mjs";
 
 const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.join(studio, "public", "analyzers");
@@ -29,38 +33,8 @@ const templates = process.env.ANALYZER_TEMPLATES
 const PICKED_TEMPLATES = [
 	"Telephone Numbers", "Email Addresses", "Date and Times", "Knowledge Base", "Bare Minimum",
 ];
-const TRAVELS = ["spec", "kb", "input"];
-const MAX_FILE_BYTES = 1_000_000;
 
-export const slug = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-
-function filesUnder(dir, rel = "") {
-	const found = [];
-	for (const entry of fs.readdirSync(path.join(dir, rel), { withFileTypes: true })) {
-		const r = rel ? `${rel}/${entry.name}` : entry.name;
-		if (entry.isDirectory()) {
-			if (entry.name.endsWith("_log") || entry.name === "output" || entry.name === "tmp") continue;
-			found.push(...filesUnder(dir, r));
-		} else if (fs.statSync(path.join(dir, r)).size <= MAX_FILE_BYTES) {
-			found.push(r);
-		}
-	}
-	return found;
-}
-
-function copyAnalyzer(from, title, origin) {
-	if (!fs.existsSync(path.join(from, "spec", "analyzer.seq"))) return null;
-	const name = slug(title);
-	const files = TRAVELS.filter((d) => fs.existsSync(path.join(from, d)))
-		.flatMap((d) => filesUnder(from, d))
-		.sort();
-	for (const f of files) {
-		const dest = path.join(out, name, f);
-		fs.mkdirSync(path.dirname(dest), { recursive: true });
-		fs.copyFileSync(path.join(from, f), dest);
-	}
-	return { name, title, origin, files };
-}
+export { slug };
 
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
@@ -69,13 +43,13 @@ const analyzers = [];
 const samples = path.join(studio, "samples");
 for (const entry of fs.readdirSync(samples, { withFileTypes: true })) {
 	if (entry.isDirectory()) {
-		const a = copyAnalyzer(path.join(samples, entry.name), entry.name, "sample");
+		const a = copyAnalyzer(path.join(samples, entry.name), entry.name, "sample", out);
 		if (a) analyzers.push(a);
 	}
 }
 if (fs.existsSync(templates)) {
 	for (const title of PICKED_TEMPLATES) {
-		const a = copyAnalyzer(path.join(templates, title), title, "template");
+		const a = copyAnalyzer(path.join(templates, title), title, "template", out);
 		if (a) analyzers.push(a);
 	}
 } else {

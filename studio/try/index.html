@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Try an analyzer · VisualText</title>
+    <meta name="description" content="Run one of VisualText's NLP++ analyzers on your own text and see its passes, knowledge base, output and parse trees." />
+  </head>
+  <body>
+    <div class="app">
+      <header class="bar">
+        <strong class="brand">Try an analyzer</strong>
+        <label class="pick">
+          <span class="muted">Analyzer</span>
+          <select id="analyzer" aria-label="Analyzer"></select>
+        </label>
+        <span class="pick">
+          <button id="run" type="button" class="run" title="Run this analyzer on the text (F5)" disabled>Run</button>
+          <label class="check" title="Run the engine in debug mode (-DEV): it keeps the parse tree after every pass, so each pass then offers its own tree and what its rules matched. Slower, and the trees can be large.">
+            <input id="debug" type="checkbox" /> Log files
+          </label>
+        </span>
+        <span id="status" class="muted grow" role="status" aria-live="polite">Starting…</span>
+        <button id="theme" type="button" title="Light or dark">Theme</button>
+      </header>
+
+      <main class="layout3">
+        <!-- What the analyzer is: its passes, and the knowledge base they read. -->
+        <nav class="col lists" aria-label="Passes and knowledge base">
+          <p id="shows" class="shows muted"></p>
+          <nlp-sequence id="sequence" heading="Analyzer sequence"></nlp-sequence>
+          <nlp-knowledge-base id="kb" heading="Knowledge base"></nlp-knowledge-base>
+          <p id="pinned" class="pinned muted"></p>
+        </nav>
+
+        <!-- Whatever was clicked on either side: a pass, a dictionary, a tree, an output file. -->
+        <section class="col viewer" aria-label="File">
+          <div class="col-head">
+            <span id="path" class="mono grow">&nbsp;</span>
+            <span id="path-note" class="muted"></span>
+          </div>
+          <nlp-code id="code" class="code"></nlp-code>
+        </section>
+
+        <!-- The text to run over, and what the run did with it. -->
+        <section class="col right" aria-label="Text and results">
+          <div class="col-head">
+            <span class="grow">Text</span>
+            <button id="reset-text" type="button" title="Put the analyzer's own sample text back">Reset</button>
+          </div>
+          <textarea id="text" class="text mono" spellcheck="false"
+            aria-label="The text to run the analyzer on"></textarea>
+          <div class="results" aria-label="Results">
+            <p id="result-message" class="result-message"></p>
+            <nlp-values id="values" heading="Values"></nlp-values>
+            <nlp-output id="output" heading="What the run wrote"></nlp-output>
+            <nlp-trees id="trees" heading="Parse trees"></nlp-trees>
+            <nlp-log id="log"></nlp-log>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/src/try/main.ts"></script>
+  </body>
+</html>

@@ -13,6 +13,14 @@ export default defineConfig({
 		target: "es2022",
 		// Monaco's editor core is one large chunk by nature (~4 MB, ~1 MB gzipped).
 		chunkSizeWarningLimit: 5000,
+		// Two pages: the studio (Monaco, editing, GitHub) and try/, which reads and runs
+		// the analyzers baked in by scripts/copy-analyzers.mjs and loads no editor at all.
+		rollupOptions: {
+			input: {
+				studio: new URL("index.html", import.meta.url).pathname,
+				try: new URL("try/index.html", import.meta.url).pathname,
+			},
+		},
 	},
 	worker: { format: "es" },
 	// ../analyzer-views is linked, not copied, and has its own node_modules; one copy of
