@@ -16,7 +16,9 @@
 //   seq.sequence = seqText;
 //   seq.addEventListener("nlp-open", (e) => open(e.detail.path));
 //
-// Properties:  files      paths, or { path, bytes } to show sizes (all but <nlp-trees>)
+// Properties:  files      paths, or { path, bytes } to show sizes (all but <nlp-trees>);
+//                         on <nlp-knowledge-base>, { description } too, the mouse-over
+//                         (kbDescription of the file's text)
 //              sequence   the text of spec/analyzer.seq (<nlp-sequence>)
 //              trees      { name, pass, passName, bytes } and skipped, names too large
 //                         to keep (<nlp-trees>); on <nlp-sequence>, the trees a -DEV run
@@ -39,7 +41,7 @@
 // LIGHT DOM, not a shadow root: the rows are ordinary buttons a page can style, test and
 // query (button[data-path]). style.css draws them; its --nlp-* properties theme them.
 
-import { type AnalyzerFile, fileSize, shownInKnowledgeBase, toFile } from "./files.js";
+import { type AnalyzerFile, fileSize, kbLabel, shownInKnowledgeBase, toFile } from "./files.js";
 import { nlpTokens } from "./highlight.js";
 import { type IconName, fileIcon, iconElement, passIcon } from "./icons.js";
 import { type NlpLanguage, NLP_LANGUAGES, langFor } from "./languages.js";
@@ -310,10 +312,11 @@ export class NlpKnowledgeBase extends FileList {
 
 	protected rows(): Row[] {
 		return this.files.filter((f) => shownInKnowledgeBase(f.path)).map((f) => ({
-			label: f.path.slice("kb/".length),
+			label: kbLabel(f.path),
 			path: f.path,
 			icon: fileIcon(f.path),
-			title: f.path,
+			// What the file holds, over where it lives, as the extension's mouse-over.
+			title: f.description ? `${f.description}\n\n${f.path}` : f.path,
 			size: fileSize(f.bytes),
 		}));
 	}

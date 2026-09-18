@@ -22,7 +22,7 @@ import { languageFor } from "./lsp/convert";
 import { type AnalyzerEntry, fileUri, loadFiles, loadIndex, pathOf } from "./analyzers";
 import {
 	type IconName, type NlpKnowledgeBase, type NlpSequence, type Pass, type TreeFile as ListedTree,
-	fileSize, iconElement, passes, ruleMatches, treeTitle,
+	fileSize, iconElement, kbDescription, passes, ruleMatches, shownInKnowledgeBase, treeTitle,
 } from "@visualtext/analyzer-views";
 import {
 	type Account, type CommitResult, type FoundAnalyzer, type RecentAnalyzer, type RepoAnalyzers, type Repository,
@@ -887,7 +887,12 @@ export class Studio {
 		sequence.addEventListener("nlp-open-matches", (e) => void this.openMatches(e.detail.path));
 		listen(sequence);
 		const kb = document.createElement("nlp-knowledge-base");
-		kb.files = entry.files;
+		// Each file's opening comment is its mouse-over, as in the extension. Only its top
+		// lines are taken: a .kbb can run to megabytes.
+		const head = (model: monaco.editor.ITextModel | undefined) =>
+			model?.getValueInRange(new monaco.Range(1, 1, Math.min(model.getLineCount(), 20) + 1, 1));
+		kb.files = entry.files.filter(shownInKnowledgeBase)
+			.map((path) => ({ path, description: kbDescription(head(this.models.get(path))) }));
 		listen(kb);
 
 		// The studio's own lists, drawn with the same rows until they move there too.
