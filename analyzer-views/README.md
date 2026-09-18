@@ -22,7 +22,8 @@ sequence.sequence = analyzerSeqText;         // the text of spec/analyzer.seq
 sequence.addEventListener("nlp-open", (e) => openFile(e.detail.path));
 
 const kb = document.createElement("nlp-knowledge-base");
-kb.files = [{ path: "kb/user/colors.dict", bytes: 3000 }];   // sizes are optional
+kb.files = [{ path: "kb/user/colors.dict", bytes: 3000,       // sizes are optional,
+	description: kbDescription(colorsDictText) }];             // and so is the mouse-over
 kb.addEventListener("nlp-open", (e) => openFile(e.detail.path));
 
 sidebar.append(sequence, kb);
@@ -42,7 +43,7 @@ Every list element takes:
 
 | | |
 |---|---|
-| `files` (property) | The paths to list: strings, or `{ path, bytes }` objects to show sizes. `<nlp-trees>` takes `trees` instead. |
+| `files` (property) | The paths to list: strings, or `{ path, bytes }` objects to show sizes. On `<nlp-knowledge-base>`, a `description` too: the file's mouse-over, above its path. `<nlp-trees>` takes `trees` instead. |
 | `selected` (property) | The path that's open now, drawn as selected. |
 | `changed` (property) | Paths with unsaved edits. Each gets a mark, plus a revert button when the element has `revertable`. |
 | `heading` (attribute) | The list's heading. `heading=""` shows no heading. |
@@ -144,7 +145,11 @@ follow the same light and dark choice.
 
 - `passes(seqText, files)` reads `analyzer.seq` into passes, numbered the way the engine
   numbers them. A switched-off pass keeps its number, and a folder or stub gets none.
-- `shownInKnowledgeBase(path)` says whether a file is listed in the knowledge base.
+- `shownInKnowledgeBase(path)` says whether a file is listed in the knowledge base, and
+  `kbLabel(path)` names it there: its path under `kb/user/`.
+- `kbDescription(text)` is what a `.dict` or `.kbb` file holds, from the comment
+  paragraph at its top, as the extension's knowledge base view shows on mouse-over. Only
+  the first 4 KB are read, so a head of the file is enough.
 - `passTooltip`, `passLabel`, `passIcon`, `fileIcon` and `fileSize` give each row's
   mouse-over, label, icon and size.
 - `outputOrder`, `treeOrder`, `treeLabel`, `treeTitle` and `treeNote` order and describe

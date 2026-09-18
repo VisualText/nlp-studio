@@ -2,7 +2,7 @@
 // The rules with no DOM at all, as a server or another page would use them.
 import { describe, expect, it } from "vitest";
 import {
-	fileIcon, fileSize, outputOrder, passComment, passIcon, passLabel, passTooltip, passes, shownInKnowledgeBase,
+	fileIcon, fileSize, outputOrder, passComment, passIcon, passLabel, passTooltip, passes, shownInKnowledgeBase, kbDescription, kbLabel,
 	filledFields, langFor, logLines, matchCount, matchesIn, problemWhere, problemsInLog, readOutput, ruleMatches,
 	treeLabel, treeNote, treeOrder, treeTitle,
 } from "../src/rules.js";
@@ -88,6 +88,22 @@ describe("the knowledge base", () => {
 			"spec/analyzer.seq", "input/words.dict",
 		];
 		expect(files.filter(shownInKnowledgeBase)).toEqual(["kb/user/colors.dict", "kb/user/en-full.DICT", "kb/user/facts.kbb"]);
+	});
+	it("names a file by its path under kb/user/", () => {
+		expect(["kb/user/colors.dict", "kb/general/en.kbb", "kb/facts.kbb"].map(kbLabel)).toEqual(["colors.dict", "general/en.kbb", "facts.kbb"]);
+	});
+	it("describes a file by the comment paragraph at its top, as the extension does", () => {
+		expect(kbDescription("# Colour words\n# for the paint analyzer\n#\n# Maintained by hand\nred\tcolor=red\n"))
+			.toBe("Colour words\nfor the paint analyzer");
+		expect(kbDescription("/*\n * Facts about firms\n */\nfirm\n")).toBe("Facts about firms");
+		expect(kbDescription("/* One line */\r\nfirm\r\n")).toBe("One line");
+		expect(kbDescription("/* then */ red\n")).toBe("");
+		expect(kbDescription("red\tcolor=red\n# not at the top\n")).toBe("");
+		expect(kbDescription(undefined)).toBe("");
+	});
+	it("reads only the head of a large file", () => {
+		expect(kbDescription(`# Every English word\n${"word\n".repeat(1_000_000)}`)).toBe("Every English word");
+		expect(kbDescription(Array.from({ length: 20 }, (_, i) => `# line ${i}`).join("\n")).split("\n")).toHaveLength(8);
 	});
 	it("prints a size, and nothing for one it does not know", () => {
 		expect([fileSize(3000), fileSize(100), fileSize(2.5 * 1024 * 1024), fileSize(0), fileSize(undefined)])

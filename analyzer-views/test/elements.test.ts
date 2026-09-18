@@ -113,8 +113,15 @@ describe("<nlp-knowledge-base>", () => {
 		document.body.append(el);
 		expect(el.querySelector("h3")?.textContent).toBe("Knowledge base");
 		expect(paths(el)).toEqual(["kb/user/colors.dict", "kb/user/facts.kbb"]);
-		expect([...el.querySelectorAll(".nlp-name")].map((n) => n.textContent)).toEqual(["user/colors.dict", "user/facts.kbb"]);
+		expect([...el.querySelectorAll(".nlp-name")].map((n) => n.textContent)).toEqual(["colors.dict", "facts.kbb"]);
 		expect([...el.querySelectorAll(".nlp-size")].map((n) => n.textContent)).toEqual(["3 KB"]);
+	});
+	it("says on mouse-over what a file holds, over its path", () => {
+		const el = document.createElement("nlp-knowledge-base") as NlpKnowledgeBase;
+		el.files = [{ path: "kb/user/colors.dict", description: "Colour words" }, "kb/user/facts.kbb"];
+		document.body.append(el);
+		expect([...el.querySelectorAll(".nlp-name")].map((n) => n.getAttribute("title")))
+			.toEqual(["Colour words\n\nkb/user/colors.dict", "kb/user/facts.kbb"]);
 	});
 	it("hides itself when the analyzer has only .kb files", () => {
 		const el = document.createElement("nlp-knowledge-base");

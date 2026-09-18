@@ -1,7 +1,7 @@
 {
   "name": "@visualtext/analyzer-views",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "An NLP++ analyzer's sequence, knowledge base, run results, values, code and log, shown the way the NLP++ extension for VS Code shows them, for any web page.",
   "type": "module",
   "repository": {
