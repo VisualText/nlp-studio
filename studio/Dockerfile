@@ -101,7 +101,7 @@ LABEL org.visualtext.nlp-studio="${NLP_STUDIO_COMMIT}" \
       org.visualtext.built-at="${BUILD_DATE}"
 
 USER studio
-EXPOSE 3001
+EXPOSE 3002
 
 # Loopback only: nginx in front holds the password. See studio/deploy/INSTALL.md.
-CMD ["python", "server/app.py", "--host", "127.0.0.1", "--port", "3001", "--dist", "dist"]
+CMD ["python", "server/app.py", "--host", "127.0.0.1", "--port", "3002", "--dist", "dist"]

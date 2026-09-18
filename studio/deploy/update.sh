@@ -29,7 +29,7 @@ IMAGE_LIVE="nlp-studio:app"
 IMAGE_PREV="nlp-studio:app-previous"
 IMAGE_NEW="nlp-studio:app-candidate"
 SERVICE="nlp-studio-app"
-HEALTH_URL="http://127.0.0.1:3001/api/health"
+HEALTH_URL="http://127.0.0.1:3002/api/health"
 LOG_DIR="${NLP_STUDIO_LOG_DIR:-$REPO/stopgap/logs}"
 LOG_KEEP_DAYS=30
 
