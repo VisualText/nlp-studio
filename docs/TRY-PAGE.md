@@ -83,16 +83,16 @@ and a second copy of another repository besides.
 
 ## Which analyzers, and why
 
-Eight of the twenty in the bundle, each showing something the others do not. Together they
-come to 188 files and 0.78 MB — small enough to be fetched into a tab.
+Seven of the twenty in the bundle, each showing something the others do not. Together they
+come to 145 files and 0.65 MB — small enough to be fetched into a tab. The page opens on the
+first, NLP from NLPFix.
 
 | On the page | From | Files | Size | Passes | Shows |
 |---|---|---|---|---|---|
-| **Corporate** | `corporate` | 43 | 132K | 30 | Companies, money and events, with pronouns resolved back to what they refer to. The showcase analyzer. |
+| **NLP** | `nlpfix-analyzers/nlp` | 26 | 314K | 17 | NLPFix's NLP analyzer: gathers what a text says about each person or thing into one record. Writes eight files. |
 | **Regions** | `nlp-tutorials/tutorial-07` | 10 | 38K | 5 | Where NLP++ code, functions and rules live in a pass — and what a code-only pass matches. |
 | **Dates and Times** | `nlpfix-analyzers/date-time` | 26 | 81K | 17 | Dates and times in many formats, where a regular expression needs rewriting for each. Four `.dict` files, and the only one that writes an `output.json`. |
 | **Formatting** | `nlpfix-analyzers/formatting` | 36 | 76K | 26 | Recovers headings, lists and tables from text that lost its formatting. |
-| **Entities** | `nlpfix-analyzers/nlp` | 26 | 314K | 17 | Gathers what a text says about each person or thing into one record. Writes eight files. |
 | **Variables** | `nlp-tutorials/tutorial-02` | 17 | 49K | 12 | The five NLP++ variables — N, S, X, G and L — on a short résumé. |
 | **Pronouns** | `nlp-tutorials/tutorial-08` | 19 | 51K | 14 | Builds a knowledge base from the text as it reads, then resolves pronouns with it. |
 | **Ambiguity** | `nlp-tutorials/tutorial-15` | 11 | 53K | 4 | Choosing between readings of the same words, with a `.dict` and a `.kbb` file. |
@@ -101,10 +101,9 @@ Two things about this set that are worth knowing before changing it.
 
 **Most of these analyzers have an empty knowledge base panel.** `<nlp-knowledge-base>`
 lists `.dict` and `.kbb` files and never the engine's own `.kb` files, which is correct and
-is the rule the package exists to keep. But only *Dates and Times*, *Entities* and
-*Ambiguity* ship any — Corporate, for all that it is the knowledge-base showcase, has six
-`.kb` files and no `.dict` or `.kbb`, so its panel hides itself. That is the truth about
-those analyzers, not a bug in the view.
+is the rule the package exists to keep. But only *NLP*, *Dates and Times* and *Ambiguity*
+ship any; the other tutorials carry only the engine's `.kb` files, so their panel hides
+itself. That is the truth about those analyzers, not a bug in the view.
 
 **`<nlp-values>` is not the answer here.** The reference implementation this page was
 modelled on leads with the fields an `output.json` filled. Of VisualText's analyzers only
@@ -118,9 +117,10 @@ only when there is an `output.json` to show.
 |---|---|
 | `parse-en-us` | **Refused by the run server**: it calls `interactive()`, which `nlp_run.BLOCKED` lists alongside the desktop app's popups. See [§ Open questions](#open-questions) — this one is probably worth revisiting. 4.6 MB besides. |
 | `nlp-tutorials/tutorial-01` | 26 MB, over the run server's 8 MB `MAX_FILES_BYTES`, so it could be listed but never run. All of it is `kb/user/attr*.kb` and `word.kb` — engine `.kb` dumps, which are not listed in the knowledge base anyway — for a sequence of one `dicttokz` pass. The weakest demo in the set regardless. |
-| `business` | Runs fine, and is one of the few analyzers with a visible knowledge base (2 `.dict`, 1 `.kbb`) — but it is **not in `analyzers.zip`**, only in the repository, so a build from a release cannot see it. It also covers much the same ground as Corporate. |
+| `corporate` | Taken off the page by VisualText's choice, with NLPFix's NLP analyzer leading in its place. It runs fine, and is the one analyzer here with several texts (four, in `Dev/` and `Samples/`), so the text picker would show for it. |
+| `business` | Runs fine, and is one of the few analyzers with a visible knowledge base (2 `.dict`, 1 `.kbb`) — but it is **not in `analyzers.zip`**, only in the repository, so a build from a release cannot see it. It also covers much the same ground as `corporate`. |
 | `files` | Walks a directory of files keeping a knowledge base across them. On a page that runs one text at a time, the point of it does not come across. |
-| the other tutorials | They run, but each overlaps one of the eight above. `tutorial-13-b` reports 14 problems, which would exercise `<nlp-log>` nicely but is not something to ship as a demo. |
+| the other tutorials | They run, but each overlaps one of the seven above. `tutorial-13-b` reports 14 problems, which would exercise `<nlp-log>` nicely but is not something to ship as a demo. |
 
 ### The survey this came from
 
@@ -158,6 +158,7 @@ problems reported, `trees` parse trees kept.
 |---|---|
 | `studio/try/index.html` | the page: a top bar and three columns |
 | `studio/src/try/main.ts` | loading an analyzer, running it, and wiring the views' events |
+| `studio/src/try/inputs.ts` | pure: which of an analyzer's files are texts to run on, and which to start with |
 | `studio/src/try/result.ts` | pure: turning a run result into what the views take, with tests in `studio/test/try.test.ts` |
 | `studio/src/try/try.css` | the three-column layout |
 | `studio/src/theme.css` | the palette and plain controls, shared with the studio page so a colour is changed once |
@@ -169,6 +170,12 @@ never does: the sequence over the knowledge base on the left; whatever was click
 pass, a dictionary, a tree, an output file — in the middle; the text and the results on the
 right. Under 900px they stack.
 
+**The text** starts as the analyzer's own sample: `input/text.txt`, or the first file in
+`input/` where there is no such file. When an analyzer ships several texts, a picker in the
+Text header offers every file under its `input/`, by path; choosing one replaces the box,
+and **Reset** puts the chosen text back. With a single text the picker does not appear, and
+none of the seven ships more than one (`src/try/inputs.ts`, tested in `test/inputs.test.ts`).
+
 Every list is a `@visualtext/analyzer-views` element, which is the point: a pass is numbered
 and a knowledge base filtered here exactly as in the VS Code extension, because it is the
 same code. Nothing about an analyzer is drawn by hand.
@@ -176,9 +183,11 @@ same code. Nothing about an analyzer is drawn by hand.
 ### Four things that will bite
 
 - **Pass numbering.** A switched-off pass (`/nlp foo`) keeps its number and writes no tree;
-  a `folder` or `stub` takes no number at all. `passes()` gets this right, and both cases
-  are live in the shipped set — `business` has the first, `corporate` the second — so
-  anything that renumbers by itself will mislabel every tree and every problem. `passTrees()`
+  a `folder` or `stub` takes no number at all. `passes()` gets this right. Neither case is
+  in the seven shipped now — `corporate` had a `stub`, `business` a switched-off pass —
+  but `test/try.test.ts` pins the gap a switched-off pass leaves, and anything that
+  renumbers by itself will mislabel every tree and every problem in an analyzer that has
+  one. `passTrees()`
   also keeps `final.tree` away from `<nlp-sequence>`: it was written after the last pass but
   belongs to none, and handing it over puts the icons on whichever pass is numbered `null`.
 - **Mark the matches over the text that ran.** `ruleMatches(tree, text)` is given

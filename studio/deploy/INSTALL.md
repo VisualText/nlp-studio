@@ -219,7 +219,7 @@ The app can keep its sign-in settings; behind the password, people sign in with 
 ## The try page
 
 `/studio/try/` is a second page in the same container, served from the same `dist` and
-using the same `/studio/api/`. It lists eight of VisualText's own analyzers, baked into
+using the same `/studio/api/`. It lists seven of VisualText's own analyzers, baked into
 the image at build time from a pinned `VisualText/analyzers` release, and lets whoever
 opens it run one on text they type. Nothing about it is separately installed or started:
 if `/studio/` works, it works.

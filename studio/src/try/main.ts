@@ -17,6 +17,7 @@ import type { NlpCode, NlpKnowledgeBase, NlpLog, NlpOutput, NlpSequence, NlpTree
 import { ruleMatches } from "@visualtext/analyzer-views/rules";
 
 import { fetchTree, outputFiles, runAnalyzer, serverHealth, type RunResult } from "../run/api";
+import { inputTexts } from "./inputs";
 import { passTrees, resultTone, valuesOutput, viewTrees } from "./result";
 import "./try.css";
 
@@ -54,6 +55,7 @@ const els = {
 	pathNote: byId<HTMLElement>("path-note"),
 	code: byId<NlpCode>("code"),
 	text: byId<HTMLTextAreaElement>("text"),
+	inputPick: byId<HTMLSelectElement>("input-pick"),
 	resetText: byId<HTMLButtonElement>("reset-text"),
 	message: byId<HTMLElement>("result-message"),
 	values: byId<NlpValues>("values"),
@@ -69,6 +71,7 @@ const state = {
 	files: new Map<string, string>(),   // the analyzer's own files, by path
 	result: null as RunResult | null,
 	ranText: "",
+	input: null as string | null,       // which of the analyzer's texts is in the box
 	busy: false,
 };
 
@@ -165,9 +168,26 @@ async function openAnalyzer(entry: TryEntry): Promise<void> {
 	const at = release ?? (commit ? commit.slice(0, 8) : null);
 	els.pinned.textContent = at ? `${repo}/${folder} at ${at}` : `${repo}/${folder}`;
 
-	els.text.value = entry.input ? state.files.get(entry.input) ?? "" : "";
-	els.resetText.disabled = !entry.input;
+	// Its texts: a picker when there is more than one, none when there is a single text.
+	const { texts, start } = inputTexts(paths, entry.input);
+	els.inputPick.replaceChildren(...texts.map((t) => {
+		const option = document.createElement("option");
+		option.value = t.path;
+		option.textContent = t.label;
+		return option;
+	}));
+	els.inputPick.hidden = texts.length < 2;
+	showInput(start);
 	showAnalyzerFile("spec/analyzer.seq");
+}
+
+// One of the analyzer's texts into the box. Choosing another replaces what was typed:
+// the box holds one text, and Reset puts the chosen one back.
+function showInput(path: string | null): void {
+	state.input = path;
+	els.text.value = path ? state.files.get(path) ?? "" : "";
+	if (path) els.inputPick.value = path;
+	els.resetText.disabled = !path;
 }
 
 // ---- running ----------------------------------------------------------------------
@@ -265,8 +285,9 @@ function wire(): void {
 		if (entry) void openAnalyzer(entry);
 	});
 	els.run.addEventListener("click", () => void run());
+	els.inputPick.addEventListener("change", () => showInput(els.inputPick.value));
 	els.resetText.addEventListener("click", () => {
-		if (state.entry?.input) els.text.value = state.files.get(state.entry.input) ?? "";
+		if (state.input) els.text.value = state.files.get(state.input) ?? "";
 	});
 	document.addEventListener("keydown", (e) => {
 		if (e.key === "F5" && !e.ctrlKey && !e.metaKey) { e.preventDefault(); void run(); }
