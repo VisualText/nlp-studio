@@ -14,7 +14,7 @@ import "@visualtext/analyzer-views/style.css";
 import "@visualtext/analyzer-views";
 import type { NlpCode, NlpKnowledgeBase, NlpLog, NlpOutput, NlpSequence, NlpTrees, NlpValues, OpenDetail }
 	from "@visualtext/analyzer-views";
-import { ruleMatches } from "@visualtext/analyzer-views/rules";
+import { kbDescription, ruleMatches, shownInKnowledgeBase } from "@visualtext/analyzer-views/rules";
 
 import { fetchTree, outputFiles, runAnalyzer, serverHealth, type RunResult } from "../run/api";
 import { inputTexts } from "./inputs";
@@ -158,8 +158,13 @@ async function openAnalyzer(entry: TryEntry): Promise<void> {
 	const encoder = new TextEncoder();
 	els.sequence.files = paths;
 	els.sequence.sequence = state.files.get("spec/analyzer.seq") ?? "";
-	// Bytes, not characters: a dictionary of accented words is longer than its length.
-	els.kb.files = paths.map((path) => ({ path, bytes: encoder.encode(state.files.get(path) ?? "").length }));
+	// Each file's opening comment is its mouse-over, as in the extension; kbDescription()
+	// reads only the top of it. Bytes, not characters: a dictionary of accented words is
+	// longer than its length.
+	els.kb.files = paths.filter(shownInKnowledgeBase).map((path) => {
+		const text = state.files.get(path) ?? "";
+		return { path, bytes: encoder.encode(text).length, description: kbDescription(text) };
+	});
 
 	els.shows.textContent = entry.shows;
 	// Say which copy of the analyzer this is: a release tag when it came from the
