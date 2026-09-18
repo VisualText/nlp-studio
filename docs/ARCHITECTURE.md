@@ -195,6 +195,36 @@ With sign-in, the invited list — not a sign-up — is what decides who gets th
 `NLP_STUDIO_REQUIRE_SIGN_IN=1` makes the server refuse to start rather than run open when
 the proxy asks for no password.
 
+#### Trying an analyzer without that sandbox (implemented)
+
+`/studio/try/` (`studio/try/`, `studio/src/try/`) lets anyone who reaches the page run one of
+VisualText's analyzers on their own text. It does not need the per-run sandbox above,
+because it does not run the visitor's code: the analyzers are copied in at build time by
+`studio/scripts/copy-analyzers.mjs` from a pinned `VisualText/analyzers` release — the same
+`analyzers.zip` VisualText downloads as its examples — and the page offers no way to edit
+the NLP++. The text is the only thing a visitor supplies, and it is data the rules read, not
+rules the engine runs.
+
+That is the whole of the argument, so the two halves of it have to hold:
+
+- **The page must stay read-only.** The moment it accepts a `.nlp` file, a pasted grammar or
+  an analyzer named by URL, the code being run is a stranger's again and everything in *The
+  run server is not a sandbox* applies. `/api/run` itself still takes arbitrary `files` — the
+  restraint is in the page, not the server — so opening this to the internet means rate
+  limits in front of `/api/run` and, for anything more than these analyzers, the sandbox.
+- **The grammars must be ones we would run ourselves.** They are picked by name in
+  `copy-analyzers.mjs`, not discovered, and each one is confirmed to run before it is listed.
+
+Which analyzers it offers and why, which are left out and why, and what to watch for when
+changing it: [TRY-PAGE.md](TRY-PAGE.md).
+
+What it shows is the extension's own views, through `@visualtext/analyzer-views`: the pass
+sequence, the knowledge base (`.dict` and `.kbb`, never `.kb`), what the run wrote, the parse
+trees, and with **Log files** on — the engine's `-DEV` — each pass's own tree and the text
+marked with what that pass's rules matched. The marks are made in the browser by
+`ruleMatches()` over *the text that ran*, which the page keeps beside the result rather than
+reading back out of the box, so editing the text after a run cannot silently move them.
+
 ### Keeping work (implemented)
 
 Edits are saved in the browser as they are typed (`studio/src/drafts.ts`). Each analyzer has

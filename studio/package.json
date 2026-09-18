@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "views": "npm --prefix ../analyzer-views run build",
-    "predev": "npm run views && node scripts/copy-samples.mjs",
+    "predev": "npm run views && npm run samples && npm run analyzers",
     "dev": "vite",
-    "prebuild": "npm run views && node scripts/copy-samples.mjs",
+    "prebuild": "npm run views && npm run samples && npm run analyzers",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "pretest": "npm run views",
@@ -15,7 +15,8 @@
     "test:server": "python -m unittest discover -s server",
     "server": "python server/app.py",
     "selftest": "python scripts/selftest.py dist",
-    "samples": "node scripts/copy-samples.mjs"
+    "samples": "node scripts/copy-samples.mjs",
+    "analyzers": "node scripts/copy-analyzers.mjs"
   },
   "dependencies": {
     "@shikijs/core": "4.4.3",

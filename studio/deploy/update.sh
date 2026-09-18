@@ -3,7 +3,7 @@
 # Keep the NLP Studio app (studio.visualtext.org/studio/) current.
 #
 # The image is built from this checkout's studio/ and analyzer-views/, plus the analyzer templates of
-# the latest visualtext-files release, and is rebuilt when either moves: a new
+# the latest visualtext-files and analyzers releases, and is rebuilt when any moves: a new
 # commit here (after a deliberate git pull on the server) or a new release. Same
 # shape as stopgap/scripts/update-studio.sh: build a candidate, smoke-test it away
 # from the live container, only then swap, and roll back if it does not answer.
@@ -72,6 +72,12 @@ WANT_VT_FILES="$(curl -fsSL --retry 3 --retry-delay 2 "${auth[@]}" \
     | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])')" \
     || die "cannot reach GitHub (visualtext-files)"
 
+WANT_ANALYZERS="$(curl -fsSL --retry 3 --retry-delay 2 "${auth[@]}" \
+        -H 'Accept: application/vnd.github+json' \
+        https://api.github.com/repos/VisualText/analyzers/releases/latest \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])')" \
+    || die "cannot reach GitHub (analyzers)"
+
 WANT_COMMIT="$(git -C "$REPO" rev-parse --short=12 HEAD)" || die "$REPO is not a git checkout"
 # Edits on the server that were never committed are labelled as such, so --check
 # and the image labels do not claim a commit the image does not match.
@@ -85,10 +91,11 @@ label() { docker image inspect "$1" --format "{{index .Config.Labels \"$2\"}}" 2
 if docker image inspect "$IMAGE_LIVE" >/dev/null 2>&1; then
     HAVE_COMMIT="$(label "$IMAGE_LIVE" org.visualtext.nlp-studio)"
     HAVE_VT_FILES="$(label "$IMAGE_LIVE" org.visualtext.visualtext-files)"
+    HAVE_ANALYZERS="$(label "$IMAGE_LIVE" org.visualtext.analyzers)"
 else
     say "no $IMAGE_LIVE image yet -- treating everything as out of date"
 fi
-: "${HAVE_COMMIT:=none}" "${HAVE_VT_FILES:=none}"
+: "${HAVE_COMMIT:=none}" "${HAVE_VT_FILES:=none}" "${HAVE_ANALYZERS:=none}"
 
 drift=0
 report() {   # report <name> <have> <want>
@@ -101,6 +108,7 @@ report() {   # report <name> <have> <want>
 }
 report nlp-studio       "$HAVE_COMMIT"   "$WANT_COMMIT"
 report visualtext-files "$HAVE_VT_FILES" "$WANT_VT_FILES"
+report analyzers        "$HAVE_ANALYZERS" "$WANT_ANALYZERS"
 
 if [ "$MODE" = check ]; then
     [ "$drift" -eq 0 ] && { say "up to date"; exit 0; }
@@ -120,6 +128,7 @@ docker build \
     --pull \
     --build-arg "NLP_STUDIO_COMMIT=$WANT_COMMIT" \
     --build-arg "VISUALTEXT_FILES_TAG=$WANT_VT_FILES" \
+    --build-arg "VISUALTEXT_ANALYZERS_TAG=$WANT_ANALYZERS" \
     --build-arg "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     -t "$IMAGE_NEW" \
     -f "$STUDIO/Dockerfile" \
@@ -181,6 +190,6 @@ say "app is up (200 after ~$((i * 2))s)"
 docker image rm "$IMAGE_NEW" >/dev/null 2>&1 || true   # the tag; :app holds the image
 docker image prune -f >/dev/null 2>&1 || true
 
-say "updated: nlp-studio $HAVE_COMMIT -> $WANT_COMMIT, visualtext-files $HAVE_VT_FILES -> $WANT_VT_FILES"
+say "updated: nlp-studio $HAVE_COMMIT -> $WANT_COMMIT, visualtext-files $HAVE_VT_FILES -> $WANT_VT_FILES, analyzers $HAVE_ANALYZERS -> $WANT_ANALYZERS"
 say "rollback if needed: docker tag $IMAGE_PREV $IMAGE_LIVE && ${COMPOSE[*]} up -d $SERVICE"
 say "=== done ==="

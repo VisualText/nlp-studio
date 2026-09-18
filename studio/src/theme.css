@@ -1,0 +1,59 @@
+/* The palette, the resets and the plain controls every studio page shares.
+ *
+ * Both pages import this: src/styles.css (the editor) and src/try/try.css (the try
+ * page), so a colour is changed once. Light by default, dark with the system unless
+ * <html data-theme="light">, and either way forced by <html data-theme>.
+ *
+ * @visualtext/analyzer-views/style.css follows the same data-theme, so the lists and
+ * the code colouring match without being told twice.
+ */
+
+:root {
+	--bg: #f7f7f5;
+	--panel: #ffffff;
+	--ink: #1d1f21;
+	--muted: #6b6f76;
+	--line: #dcdcd8;
+	--on: #e3ecfb;
+	--on-ink: #1f4fa3;
+	--accent: #1f6feb;
+	--accent-ink: #ffffff;
+	--ok: #1a7f37;
+	--error: #b3261e;
+	--warning: #8a5a00;
+	color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) {
+		--bg: #17181a; --panel: #1e1f22; --ink: #e4e4e4; --muted: #9aa0a6; --line: #34363a;
+		--on: #243553; --on-ink: #a9c7ff; --accent: #2f81f7; --accent-ink: #ffffff; --ok: #56d364;
+		--error: #f28b82; --warning: #fdd663;
+		color-scheme: dark;
+	}
+}
+:root[data-theme="dark"] {
+	--bg: #17181a; --panel: #1e1f22; --ink: #e4e4e4; --muted: #9aa0a6; --line: #34363a;
+	--on: #243553; --on-ink: #a9c7ff; --accent: #2f81f7; --accent-ink: #ffffff; --ok: #56d364;
+	--error: #f28b82; --warning: #fdd663;
+	color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+.muted { color: var(--muted); }
+.grow { flex: 1; }
+[hidden] { display: none !important; }
+
+.app { display: flex; flex-direction: column; height: 100vh; }
+.bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: var(--panel);
+	border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.brand { font-size: 15px; }
+.pick { display: inline-flex; align-items: center; gap: 6px; }
+
+select, button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+	border-radius: 6px; padding: 4px 8px; }
+button { cursor: pointer; }
+button:disabled { cursor: default; opacity: .55; }
+button.run { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; padding: 4px 14px; }

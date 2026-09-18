@@ -65,6 +65,15 @@ restrictions as the live container: the sample analyzer must run to its known ou
 
 Nothing is public yet: the container listens on loopback only.
 
+The container runs with `network_mode: host`, so port 3001 has to be free before it
+starts — nothing warns you if another service already answers there, and the health
+check above would be that service's answer rather than the studio's. Check first:
+
+    ss -ltnp | grep ':3001 ' || echo "3001 is free"
+
+If something else holds it, give the app another port in `docker-compose.yml` (the
+`--port` in its `command`) and in the nginx `proxy_pass`; the two must agree.
+
 ### 3. Route /studio/ in nginx, behind the password — as root
 
 The `/studio/` locations are their own file, installed beside the phase-1 one. Put the
@@ -93,11 +102,13 @@ as for phase 1.
     # authenticated first -- this is what would populate a cache
     curl -sk -o /dev/null -w '%{http_code}\n' -u "$U" $S/studio/              # 200
     curl -sk -u "$U" $S/studio/api/health                                     # {"ok": true, ...}
+    curl -sk -o /dev/null -w '%{http_code}\n' -u "$U" $S/studio/try/          # 200
 
     # anonymous IMMEDIATELY after: 401, never a cached 200
     curl -sk -o /dev/null -w '%{http_code}\n' $S/studio/                      # 401
     curl -sk -o /dev/null -w '%{http_code}\n' $S/studio/api/health            # 401
     curl -sk -o /dev/null -w '%{http_code}\n' -X POST $S/studio/api/run       # 401
+    curl -sk -o /dev/null -w '%{http_code}\n' $S/studio/try/                  # 401
 
     # phase 1 is unchanged
     curl -sk -o /dev/null -w '%{http_code}\n' -u "$U" $S/                     # 302 (to ?folder=/home/examples)
@@ -200,6 +211,44 @@ signs everyone out.
     nginx -t && /usr/local/cpanel/scripts/restartsrv_nginx
 
 The app can keep its sign-in settings; behind the password, people sign in with both.
+
+## The try page
+
+`/studio/try/` is a second page in the same container, served from the same `dist` and
+using the same `/studio/api/`. It lists eight of VisualText's own analyzers, baked into
+the image at build time from a pinned `VisualText/analyzers` release, and lets whoever
+opens it run one on text they type. Nothing about it is separately installed or started:
+if `/studio/` works, it works.
+
+What it offers and how the catalog is built: [docs/TRY-PAGE.md](../../docs/TRY-PAGE.md).
+
+Which release went in is on the image:
+
+    docker image inspect nlp-studio:app --format '{{index .Config.Labels "org.visualtext.analyzers"}}'
+
+`update.sh` treats that release like the others — when VisualText/analyzers publishes a
+new one, the app is out of date and the next run rebuilds with it.
+
+### Before opening it to people who are not invited
+
+Today the try page sits behind whatever guards `/studio/` — the site's password, or
+GitHub sign-in. It is the one page here that *could* be opened wider, because it does not
+run a visitor's code: the analyzers are ours, fixed at build time, and the page offers no
+way to edit the NLP++. That argument is the only thing separating it from
+`docs/ARCHITECTURE.md`, *The run server is not a sandbox*, so before it is opened:
+
+- **`/api/run` is still the general endpoint.** It accepts any `files` a caller sends. A
+  location that lets anonymous requests reach `/studio/api/run` is a remote code
+  execution endpoint on the host that serves visualtext.org, whatever the page does. Open
+  `/studio/try/` and the static files under it; do not open `/studio/api/run` without the
+  per-run sandbox that `ARCHITECTURE.md` describes as not built.
+- **Rate limits.** A run costs a CPU second and a process. `limit_req` on the run endpoint,
+  sized against `--max-runs`, before it is reachable from the internet.
+- **The page must stay read-only.** If it ever accepts a pasted grammar or an analyzer
+  chosen by URL, the reasoning above stops holding and the sandbox becomes a prerequisite
+  again.
+- **Verify anonymously**, in the order §4 uses: authenticated first, anonymous immediately
+  after. A cached 200 is the failure to look for.
 
 ## Keeping it current
 

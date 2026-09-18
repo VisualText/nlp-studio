@@ -14,8 +14,14 @@
 # can be labelled with what went into it.
 ARG VISUALTEXT_FILES_TAG=latest
 
+# Which VisualText/analyzers release the try page's analyzers come from: the same
+# analyzers.zip VisualText downloads as its examples, so /try/ offers the set a
+# VisualText user has. update.sh pins the tag it resolved.
+ARG VISUALTEXT_ANALYZERS_TAG=latest
+
 FROM node:22-slim AS site
 ARG VISUALTEXT_FILES_TAG
+ARG VISUALTEXT_ANALYZERS_TAG
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl unzip \
@@ -36,6 +42,21 @@ RUN set -eu; \
     rm /tmp/visualtext.zip; \
     test -d /visualtext/analyzer-templates
 
+# VisualText's own analyzers, for the try page. The zip holds the five bundled entries
+# (corporate, files, parse-en-us, nlp-tutorials, nlpfix-analyzers); copy-analyzers.mjs
+# picks from them.
+RUN set -eu; \
+    if [ "$VISUALTEXT_ANALYZERS_TAG" = latest ]; then \
+        url="https://github.com/VisualText/analyzers/releases/latest/download/analyzers.zip"; \
+    else \
+        url="https://github.com/VisualText/analyzers/releases/download/$VISUALTEXT_ANALYZERS_TAG/analyzers.zip"; \
+    fi; \
+    curl -fsSL --retry 3 --retry-delay 2 -o /tmp/analyzers.zip "$url"; \
+    mkdir -p /analyzers; \
+    unzip -q /tmp/analyzers.zip -d /analyzers; \
+    rm /tmp/analyzers.zip; \
+    test -d /analyzers/nlp-tutorials
+
 WORKDIR /src/analyzer-views
 COPY analyzer-views/package.json analyzer-views/package-lock.json ./
 RUN npm ci --no-audit --no-fund
@@ -45,12 +66,15 @@ WORKDIR /src/studio
 COPY studio/package.json studio/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY studio/ ./
-ENV ANALYZER_TEMPLATES=/visualtext/analyzer-templates
+ENV ANALYZER_TEMPLATES=/visualtext/analyzer-templates \
+    VISUALTEXT_ANALYZERS=/analyzers \
+    VISUALTEXT_ANALYZERS_TAG=${VISUALTEXT_ANALYZERS_TAG}
 RUN npm run build
 
 
 FROM python:3.12-slim
 ARG VISUALTEXT_FILES_TAG
+ARG VISUALTEXT_ANALYZERS_TAG
 ARG NLP_STUDIO_COMMIT=unknown
 ARG BUILD_DATE=unknown
 
@@ -73,6 +97,7 @@ COPY --from=site /src/studio/dist dist
 #   docker image inspect nlp-studio:app --format '{{json .Config.Labels}}'
 LABEL org.visualtext.nlp-studio="${NLP_STUDIO_COMMIT}" \
       org.visualtext.visualtext-files="${VISUALTEXT_FILES_TAG}" \
+      org.visualtext.analyzers="${VISUALTEXT_ANALYZERS_TAG}" \
       org.visualtext.built-at="${BUILD_DATE}"
 
 USER studio
