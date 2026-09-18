@@ -70,9 +70,13 @@ The source is either of two things, and the distinction matters:
 
 Only `spec/`, `kb/` and `input/` travel — never `output/`, `tmp/` or an engine run's
 `*_log/`, which are a previous run's leavings and would otherwise be read back as though
-this page's run had written them. Files over 1 MB are skipped; see
-`studio/scripts/analyzer-files.mjs`, which both copy scripts share so they cannot drift on
-what an analyzer is.
+this page's run had written them. Files over 1 MB are skipped, and so is any `.html`: the
+NLPFix analyzers carry a syntax-highlighted rendering of every pass and dictionary beside
+it (`spec/dates.nlp.html` next to `spec/dates.nlp`), made for a web page and read by
+nothing here — the sequence comes from `analyzer.seq` and the knowledge base lists only
+`.dict` and `.kbb`. They were 46% of the catalog by size, downloaded by every visitor and
+sent up again with every run. See `studio/scripts/analyzer-files.mjs`, which both copy
+scripts share so they cannot drift on what an analyzer is.
 
 `studio/public/try/` is generated and git-ignored. It is not committed: it is build output,
 and a second copy of another repository besides.
@@ -80,15 +84,15 @@ and a second copy of another repository besides.
 ## Which analyzers, and why
 
 Eight of the twenty in the bundle, each showing something the others do not. Together they
-come to 259 files and 1.45 MB — small enough to be fetched into a tab.
+come to 188 files and 0.78 MB — small enough to be fetched into a tab.
 
 | On the page | From | Files | Size | Passes | Shows |
 |---|---|---|---|---|---|
 | **Corporate** | `corporate` | 43 | 132K | 30 | Companies, money and events, with pronouns resolved back to what they refer to. The showcase analyzer. |
 | **Regions** | `nlp-tutorials/tutorial-07` | 10 | 38K | 5 | Where NLP++ code, functions and rules live in a pass — and what a code-only pass matches. |
-| **Dates and Times** | `nlpfix-analyzers/date-time` | 48 | 273K | 17 | Dates and times in many formats, where a regular expression needs rewriting for each. Four `.dict` files, and the only one that writes an `output.json`. |
-| **Formatting** | `nlpfix-analyzers/formatting` | 66 | 225K | 26 | Recovers headings, lists and tables from text that lost its formatting. |
-| **Entities** | `nlpfix-analyzers/nlp` | 45 | 661K | 17 | Gathers what a text says about each person or thing into one record. Writes eight files. |
+| **Dates and Times** | `nlpfix-analyzers/date-time` | 26 | 81K | 17 | Dates and times in many formats, where a regular expression needs rewriting for each. Four `.dict` files, and the only one that writes an `output.json`. |
+| **Formatting** | `nlpfix-analyzers/formatting` | 36 | 76K | 26 | Recovers headings, lists and tables from text that lost its formatting. |
+| **Entities** | `nlpfix-analyzers/nlp` | 26 | 314K | 17 | Gathers what a text says about each person or thing into one record. Writes eight files. |
 | **Variables** | `nlp-tutorials/tutorial-02` | 17 | 49K | 12 | The five NLP++ variables — N, S, X, G and L — on a short résumé. |
 | **Pronouns** | `nlp-tutorials/tutorial-08` | 19 | 51K | 14 | Builds a knowledge base from the text as it reads, then resolves pronouns with it. |
 | **Ambiguity** | `nlp-tutorials/tutorial-15` | 11 | 53K | 4 | Choosing between readings of the same words, with a `.dict` and a `.kbb` file. |

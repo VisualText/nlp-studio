@@ -14,6 +14,13 @@ import path from "node:path";
 // read back as if the page's own run had written it.
 export const TRAVELS = ["spec", "kb", "input"];
 
+// Some analyzers carry a syntax-highlighted rendering of each pass and dictionary
+// beside it -- spec/dates.nlp.html next to spec/dates.nlp -- made for a web page,
+// not for the engine. Nothing reads them: the sequence comes from analyzer.seq and
+// the knowledge base lists only .dict and .kbb. They were 46% of the try page's
+// analyzers by size, downloaded by every visitor and sent up again with every run.
+const RENDERED = /\.html?$/i;
+
 // The run server refuses a request over 8 MB of files (nlp_run.MAX_FILES_BYTES),
 // so anything larger could be listed but never run.
 export const MAX_FILE_BYTES = 1_000_000;
@@ -30,7 +37,7 @@ export function filesUnder(dir, rel = "") {
 		if (entry.isDirectory()) {
 			if (entry.name.endsWith("_log") || entry.name === "output" || entry.name === "tmp") continue;
 			found.push(...filesUnder(dir, r));
-		} else if (fs.statSync(path.join(dir, r)).size <= MAX_FILE_BYTES) {
+		} else if (!RENDERED.test(entry.name) && fs.statSync(path.join(dir, r)).size <= MAX_FILE_BYTES) {
 			found.push(r);
 		}
 	}
