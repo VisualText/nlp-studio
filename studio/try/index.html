@@ -45,8 +45,11 @@
         <!-- The text to run over, and what the run did with it. -->
         <section class="col right" aria-label="Text and results">
           <div class="col-head">
-            <span class="grow">Text</span>
-            <button id="reset-text" type="button" title="Put the analyzer's own sample text back">Reset</button>
+            <span>Text</span>
+            <!-- Shown only when the analyzer ships more than one text to run on. -->
+            <select id="input-pick" class="input-pick" aria-label="Which of the analyzer's texts" hidden></select>
+            <span class="grow"></span>
+            <button id="reset-text" type="button" title="Put this text back as the analyzer has it">Reset</button>
           </div>
           <textarea id="text" class="text mono" spellcheck="false"
             aria-label="The text to run the analyzer on"></textarea>

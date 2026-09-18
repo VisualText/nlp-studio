@@ -34,25 +34,25 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.join(studio, "public", "try", "analyzers");
 const repo = process.env.VISUALTEXT_ANALYZERS || path.resolve(studio, "..", "..", "analyzers");
 
-// Eight of the twenty in the bundle, each showing something the others do not, and each
-// confirmed to run through the run server. What is left out, and why:
+// Seven of the twenty in the bundle, each confirmed to run through the run server. The
+// first is the one the page opens with. What is left out, and why:
 //
+//   corporate                taken off by VisualText's choice; NLP from NLPFix leads
+//                            instead.
 //   parse-en-us              refused: it calls interactive(), which nlp_run.BLOCKED
 //                            lists with the desktop app's popups. 4.6 MB besides.
 //   nlp-tutorials/tutorial-01  26 MB of engine .kb dumps, over the run server's 8 MB
 //                            limit, for a sequence of one pass.
-//   the remaining tutorials  they run, but each overlaps one of the eight below.
+//   the remaining tutorials  they run, but each overlaps one of the seven below.
 const PICKED = [
-	["corporate", "Corporate",
-		"Companies, money and events, with pronouns resolved back to what they refer to."],
+	["nlpfix-analyzers/nlp", "NLP",
+		"NLPFix's NLP analyzer: gathers what a text says about each person or thing into one record."],
 	["nlp-tutorials/tutorial-07", "Regions",
 		"Where NLP++ code, functions and rules live in a pass — and what a code-only pass matches."],
 	["nlpfix-analyzers/date-time", "Dates and Times",
 		"Dates and times in many formats, where a regular expression needs rewriting for each."],
 	["nlpfix-analyzers/formatting", "Formatting",
 		"Recovers headings, lists and tables from text that lost its formatting."],
-	["nlpfix-analyzers/nlp", "Entities",
-		"Gathers what a text says about each person or thing into one record."],
 	["nlp-tutorials/tutorial-02", "Variables",
 		"The five NLP++ variables — N, S, X, G and L — on a short résumé."],
 	["nlp-tutorials/tutorial-08", "Pronouns",
