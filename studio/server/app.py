@@ -3,7 +3,8 @@
     python server/app.py                  # the API on http://127.0.0.1:8765/api/
     python server/app.py --dist dist      # ...and the built site, from the same origin
 
-    GET  /api/health    {"ok": true, "engine": "2.2.38", "timeout": 10, "maxRuns": 2, "signIn": false, "github": false}
+    GET  /api/health    {"ok": true, "engine": "2.2.38", "timeout": 10, "maxRuns": 2, "signIn": false, "github": false,
+                         "openers": []}   <- NLP_STUDIO_OPENERS: the pages that may hand the studio a text
     POST /api/run       {"files": {"spec/analyzer.seq": "...", ...}, "text": "...", "develop"?: true}
                         -> 200 with nlp_run.run()'s result, whatever the run did;
                            400 for a request no analyzer could make, 401 not signed in,
@@ -109,6 +110,10 @@ class RunServer(ThreadingHTTPServer):
         self.dev_login: str | None = None
         self.sessions = Sessions()
         self.trees = TreeStore()
+        # The pages allowed to open the studio and hand it a text (src/handoff.ts): exact
+        # origins, comma-separated. None by default -- a page on the open web must not be
+        # able to put text into someone's editor.
+        self.openers = [o.strip().rstrip("/") for o in option("openers").split(",") if o.strip()]
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -209,7 +214,8 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/health":
             opts = srv.options
             return self._json(200, {"ok": True, "engine": srv.engine, "timeout": opts.timeout, "maxRuns": opts.max_runs,
-                                    "signIn": srv.sign_in, "github": bool(srv.sign_in or srv.dev_token)})
+                                    "signIn": srv.sign_in, "github": bool(srv.sign_in or srv.dev_token),
+                                    "openers": srv.openers})
         if path == "/api/auth/me":
             return self._me()
         if path == "/api/auth/login":
@@ -410,6 +416,7 @@ def options(argv=None) -> argparse.Namespace:
     opts.users = os.environ.get("NLP_STUDIO_USERS", "")
     opts.dev_token = os.environ.get("NLP_STUDIO_GITHUB_TOKEN", "")
     opts.require_sign_in = os.environ.get("NLP_STUDIO_REQUIRE_SIGN_IN", "")
+    opts.openers = os.environ.get("NLP_STUDIO_OPENERS", "")
     return opts
 
 

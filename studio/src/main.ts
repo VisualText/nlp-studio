@@ -29,6 +29,7 @@ import {
 	SIGN_IN_URL, account, analyzersIn, commitChanges as sendCommit, entryName, recent, remember, repositories, signOut,
 } from "./github/api";
 import { DraftStore } from "./drafts";
+import { type OpenLink, keepLink, listenForHandoff, parseOpenLink, takeLink } from "./handoff";
 import { safeFolder, zipAnalyzer } from "./zipfiles";
 import {
 	type RunResult, type RunTrees, type TreeFile, fetchTree, outputFiles, runAnalyzer, serverHealth,
@@ -119,6 +120,10 @@ export class Studio {
 	private readonly matchModels = new Map<string, monaco.editor.ITextModel>();
 	private readonly outputModels = new Map<string, monaco.editor.ITextModel>();
 	private lastPath: string | undefined;
+	// Texts handed over by the page that opened the studio (src/handoff.ts), by path:
+	// input files for as long as the page is open, and nothing more -- never a draft,
+	// never committed, never in the Download zip.
+	private readonly handed = new Map<string, string>();
 	private treeRequest = 0;
 	private runCount = 0;
 
@@ -228,13 +233,52 @@ export class Studio {
 			.map(([path, model]) => ({ uri: fileUri(entry.name, path), text: model.getValue() })));
 		this.passList = passes(this.models.get("spec/analyzer.seq")?.getValue() ?? "", entry.files);
 		this.inputPath = entry.files.find((f) => f.startsWith("input/"));
+		this.installHanded();
+		// A handed-in text is why the studio was opened: it is what a run reads.
+		const handedPath = [...this.handed.keys()].pop();
+		if (handedPath) this.inputPath = handedPath;
 		this.panel.clear();
 		this.renderFiles();
 		this.renderChoices();
 		this.showRunTarget();
 		this.showChanges();
 		const first = this.passList.find((p) => p.file && p.active)?.file;
-		this.openPath(first ?? "spec/analyzer.seq");
+		this.openPath(handedPath ?? first ?? "spec/analyzer.seq");
+	}
+
+	// ---- Handed-in texts ----------------------------------------------------------------
+
+	// A text the opener handed over becomes input/<name> in whatever analyzer is open, now
+	// and after any other opens, and is what the next run reads.
+	addHandedInput(name: string, text: string): string {
+		const path = `input/${name}`;
+		this.handed.delete(path);
+		this.handed.set(path, text);
+		this.models.get(path)?.dispose();
+		this.models.delete(path);
+		if (this.current) {
+			this.installHanded();
+			this.renderFiles();
+			this.showChanges();
+			this.openPath(path);
+		}
+		return path;
+	}
+
+	isHanded(path: string): boolean {
+		return this.handed.has(path);
+	}
+
+	private installHanded(): void {
+		if (!this.current) return;
+		for (const [path, text] of this.handed) {
+			if (this.models.has(path)) continue;
+			const model = monaco.editor.createModel(text, languageFor(path),
+				monaco.Uri.parse(fileUri(this.current.name, path)));
+			model.setEOL(monaco.editor.EndOfLineSequence.LF);
+			this.originals.set(path, text);
+			this.models.set(path, model);
+		}
 	}
 
 	openPath(path: string, selection?: monaco.IRange | monaco.IPosition): void {
@@ -529,6 +573,27 @@ export class Studio {
 		}
 	}
 
+	// Open the analyzer a link names, signing in first if need be, and -- when the link
+	// asks -- take a text from the page that opened the studio.
+	async openLink(link: OpenLink, openers: readonly string[]): Promise<void> {
+		if (link.handoff) {
+			listenForHandoff(openers, ({ name, text }) => {
+				const path = this.addHandedInput(name, text);
+				this.say(`${path.slice(6)} handed in: not saved, committed or downloaded.`);
+			});
+			if (!openers.length && window.opener) {
+				this.say("A page asked to hand this studio a text, and no page is allowed to (NLP_STUDIO_OPENERS).");
+			}
+		}
+		if (this.account?.github && !this.account.signedIn) {
+			keepLink(link);
+			this.say(`Sign in with GitHub to open ${link.folder || link.repo}.`);
+			return;
+		}
+		await this.openRecent({ repo: link.repo, ref: link.ref || "", folder: link.folder,
+			title: link.folder.split("/").pop() || link.repo });
+	}
+
 	// Reopen a remembered GitHub analyzer, at the branch's latest commit.
 	async openRecent(item: RecentAnalyzer): Promise<void> {
 		this.say(`Opening ${item.title} from ${item.repo}…`);
@@ -670,7 +735,9 @@ export class Studio {
 
 	// The files whose text differs from what was opened.
 	changedPaths(): string[] {
-		return [...this.models].filter(([path, model]) => model.getValue() !== this.originals.get(path)).map(([path]) => path);
+		return [...this.models]
+			.filter(([path, model]) => !this.handed.has(path) && model.getValue() !== this.originals.get(path))
+			.map(([path]) => path);
 	}
 
 	// Save every draft still waiting on its pause.
@@ -709,7 +776,9 @@ export class Studio {
 	// The open analyzer, with any edits, as a zip of its folder.
 	analyzerZip(): Uint8Array {
 		const entry = this.current!;
-		return zipAnalyzer(entry.title, [...this.models].map(([path, model]) => [path, model.getValue()] as const));
+		return zipAnalyzer(entry.title, [...this.models]
+			.filter(([path]) => !this.handed.has(path))
+			.map(([path, model]) => [path, model.getValue()] as const));
 	}
 
 	download(): void {
@@ -726,6 +795,7 @@ export class Studio {
 	}
 
 	private scheduleSave(path: string): void {
+		if (this.handed.has(path)) return;
 		clearTimeout(this.pendingSaves.get(path));
 		this.pendingSaves.set(path, setTimeout(() => this.saveDraft(path), SAVE_AFTER_MS));
 		this.showChanges();
@@ -922,9 +992,14 @@ export class Studio {
 			li.append(row);
 			list.append(li);
 		};
-		const input = entry.files.filter((f) => f.startsWith("input/"));
-		if (input.length) {
+		const input = entry.files.filter((f) => f.startsWith("input/") && !this.handed.has(f));
+		if (input.length || this.handed.size) {
 			const list = section("Input");
+			for (const f of this.handed.keys()) {
+				item(list, `${f.slice(6)} (handed in)`, f, { icon: "file",
+					title: `${f}: handed in by the page that opened the studio. Not saved in this browser, `
+						+ "not committed and not downloaded -- closing the tab is the end of it." });
+			}
 			for (const f of input) item(list, f.slice(6), f, { icon: "file", title: f });
 		}
 		// What the run wrote, and its parse trees, as the extension's OUTPUT FILES view lists
@@ -1004,6 +1079,11 @@ async function main(): Promise<void> {
 	}
 	const kept = studio.drafts.available ? "" : "This browser blocks storage, so edits are not kept. ";
 	studio.say(health ? kept.trim() : `${kept}Running needs the run server: see the README.`);
+
+	// Opened by a link: open the analyzer it names, and take a text from the opener.
+	// Signing in leaves the page, so the link is kept across it (never the text).
+	const link = parseOpenLink(location.search) ?? takeLink();
+	if (link) await studio.openLink(link, health?.openers ?? []);
 
 	const params = new URLSearchParams(location.search);
 	if (params.has("selftest")) {

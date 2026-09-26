@@ -70,6 +70,8 @@ export interface ServerHealth {
 	engine: string | null;
 	timeout: number;
 	maxRuns: number;
+	// The origins allowed to open the studio and hand it a text (src/handoff.ts).
+	openers?: string[];
 }
 
 const NO_SERVER = "No run server answered. Start one with: python server/app.py (see the README).";

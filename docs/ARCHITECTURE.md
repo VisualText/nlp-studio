@@ -275,6 +275,30 @@ The editor is for invited people, and their analyzers live in GitHub repositorie
   refusal of anyone not invited, token refresh and reading in `server/test_github.py`, and
   opening and running an analyzer from a repository in the browser self test.
 
+### Opened by another page, with a text (implemented)
+
+A page that shows real documents -- the TEG NLP console's Workbench, listing every
+résumé the pipeline holds -- opens the studio on one of them, in the analyzer that reads
+it, ready to run and edit (`src/handoff.ts`).
+
+- **The link names the analyzer:** `?repo=owner/name&ref=branch&folder=path&handoff=1`
+  opens it from GitHub as "Open from GitHub" would. Not signed in, the link waits in
+  `sessionStorage` across the sign-in round trip and is taken back once.
+- **The text never travels in the link.** It can be a client's document, and a URL lands in
+  history, logs and referrers. With `handoff=1` the studio posts `nlp-studio:ready` to the
+  window that opened it; that window answers `{type: "nlp-studio:input", name, text}`. The
+  studio takes it only from `window.opener`, only from an origin listed in
+  `NLP_STUDIO_OPENERS` (reported by `/api/health`; none by default), only up to 2 MB, and
+  names it `input/<name>.txt` with the name reduced to safe characters.
+- **A handed-in text is never kept.** It is an input file while the page is open and is
+  what a run reads, but it is never a draft in the browser's storage, never among the
+  changed files, never committed and never in the Download zip. The file list says so
+  beside it. A reload -- signing in is one -- loses it, and the studio says `ready` again so
+  the opener can hand it over again.
+- **Where the studio runs is where the text goes.** A run sends the input to the run
+  server that served the page. A page handing over client documents points at a studio its
+  own organization runs, with sign-in required.
+
 ### Why the engine stays server-side
 
 The engine is a native C++ binary. `nlpplus` links it as a Node-API addon and runs calls
