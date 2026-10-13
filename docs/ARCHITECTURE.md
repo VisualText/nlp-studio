@@ -135,13 +135,12 @@ files the analyzer wrote, problems, and the engine's log. Its parse trees open i
   `kbView`/`textView` give them. `analyzer-views/src/icons.ts` holds that artwork inlined from
   `vscode-nlp/resources` (MIT), shapes carrying `currentColor` so one copy serves both themes
   and a switched-off pass is the same shape in grey rather than a second drawing.
-- **Tree colours are the extension's.** The grammars name scopes no stock theme knows
-  (`keyword.node.tree`, `keyword.rewrite.tree`, `keyword.concept.kbb2`), which is why VS Code
-  colours them through `editor.tokenColorCustomizations` in the `.vscode/settings.json` that
-  `vscode-nlp` and the analyzer repositories ship. `analyzer-views/src/colors.ts` holds those
+- **Tree colours are the extension's.** The grammars use standard scope names, which any
+  theme colours, but VS Code also colours them through `editor.tokenColorCustomizations` in
+  the `.vscode/settings.json` that `vscode-nlp` and the analyzer repositories ship. `analyzer-views/src/colors.ts` holds those
   rules, rule for rule, for light and for dark, and `analyzer-views/src/highlight.ts` folds them
   into both shiki themes, for the editor and for `<nlp-code>` alike.
-  Without them a tree is one flat keyword colour.
+  Without them a tree takes the stock theme's colours rather than the extension's.
 - **Pass numbers are the engine's.** A switched-off pass (`/nlp name`) keeps its number and
   a folder or stub has none. That was measured, not assumed, and both the page
   (`analyzer-views/src/sequence.ts`) and the server number `analyzer.seq` the same way.
