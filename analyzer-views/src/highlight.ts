@@ -5,9 +5,9 @@
 // loaded on first use -- the grammars and themes are chunks nobody pays for until code is
 // on screen. <nlp-code> renders its tokens; NLP Studio hands the same highlighter to Monaco.
 //
-// THE EXTENSION'S COLOURS. The grammars name scopes of their own (keyword.node.tree,
-// keyword.concept.kbb2, ...) that no stock theme knows, so the extension's rules for them
-// (colors.ts) go into light-plus and dark-plus first.
+// THE EXTENSION'S COLOURS. The grammars use standard scope names, so light-plus and
+// dark-plus colour them on their own; the extension's own rules (colors.ts) go in first
+// so a parse tree is green, bold and red the way VS Code shows it.
 //
 // BOTH THEMES AT ONCE. Tokens carry their light and dark colours as --shiki-light and
 // --shiki-dark, and style.css picks one, so a theme change repaints without tokenising.
