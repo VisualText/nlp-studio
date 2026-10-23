@@ -52,6 +52,8 @@ export const RUN_MARKERS = "nlp++ run";
 const SAVE_AFTER_MS = 500;
 // Whether Debug was ticked last time, in this browser.
 const DEBUG_KEY = "nlp-studio.debug";
+// Whether the text pane was hidden last time, in this browser.
+const TEXT_KEY = "nlp-studio.text-pane";
 
 function remembered(key: string): string | null {
 	try {
@@ -72,6 +74,13 @@ function rememberSetting(key: string, value: string): void {
 // A tree as the run server describes it, for <nlp-trees>.
 function listedTree(file: TreeFile): ListedTree {
 	return { name: file.name, pass: file.pass, passName: file.passName, bytes: file.size };
+}
+
+// Input files in the order the text list shows them: the input folder's own files first,
+// then each folder's.
+function byFolder(a: string, b: string): number {
+	const depth = (p: string) => (p.split("/").length > 2 ? 1 : 0);
+	return depth(a) - depth(b) || a.localeCompare(b, undefined, { numeric: true });
 }
 
 function darkTheme(): boolean {
@@ -103,6 +112,10 @@ export class Studio {
 	passList: Pass[] = [];
 	account: Account | null = null;
 	readonly editor: monaco.editor.IStandaloneCodeEditor;
+	// The text a run reads, beside the editor: the same model as the input file, so an
+	// edit in either is the other's too, and is kept, reverted and downloaded the same.
+	readonly textEditor: monaco.editor.IStandaloneCodeEditor;
+	private textChoices = "";
 	readonly panel: RunPanel;
 	readonly drafts = DraftStore.browser();
 	private readonly models = new Map<string, monaco.editor.ITextModel>();
@@ -152,6 +165,34 @@ export class Studio {
 			},
 		});
 		monaco.editor.onDidChangeMarkers(() => this.showProblems());
+
+		this.textEditor = monaco.editor.create(byId("text-editor"), {
+			automaticLayout: true,
+			fontSize: 13,
+			wordWrap: "on",
+			minimap: { enabled: false },
+			scrollBeyondLastLine: false,
+			lineNumbersMinChars: 3,
+			theme: darkTheme() ? THEMES.dark : THEMES.light,
+		});
+		this.textEditor.addAction({
+			id: "nlp.runAnalyzer",
+			label: "Run Analyzer",
+			keybindings: [monaco.KeyCode.F5],
+			run: () => void this.run(),
+		});
+		byId<HTMLSelectElement>("text-pick").addEventListener("change", (event) => {
+			this.inputPath = (event.target as HTMLSelectElement).value || undefined;
+			this.showRunTarget();
+		});
+		const toggle = byId("text-toggle");
+		toggle.setAttribute("aria-pressed", remembered(TEXT_KEY) === "hidden" ? "false" : "true");
+		toggle.addEventListener("click", () => {
+			const shown = toggle.getAttribute("aria-pressed") !== "true";
+			toggle.setAttribute("aria-pressed", String(shown));
+			rememberSetting(TEXT_KEY, shown ? "shown" : "hidden");
+			this.showText();
+		});
 
 		this.panel = new RunPanel(byId("results"), {
 			open: (path, at) => this.openPath(path, at),
@@ -929,6 +970,48 @@ export class Studio {
 		run.disabled = this.running || !name;
 		run.textContent = this.running ? "Running…" : "Run";
 		run.classList.toggle("busy", this.running);
+		this.showText();
+	}
+
+	// The text pane: every input file to choose from, grouped by folder, and the chosen one
+	// to read and edit. Shown while the analyzer has input and the Text button is pressed.
+	private showText(): void {
+		const inputs = [...this.models.keys()].filter((p) => p.startsWith("input/")).sort(byFolder);
+		const shown = inputs.length > 0 && byId("text-toggle").getAttribute("aria-pressed") === "true";
+		byId("text-pane").hidden = !shown;
+		byId("text-toggle").hidden = inputs.length === 0;
+		document.querySelector(".layout")?.classList.toggle("with-text", shown);
+
+		const pick = byId<HTMLSelectElement>("text-pick");
+		const choices = inputs.join("\n");
+		if (choices !== this.textChoices) {
+			this.textChoices = choices;
+			pick.replaceChildren();
+			const groups = new Map<string, HTMLElement>();
+			for (const path of inputs) {
+				const rel = path.slice("input/".length);
+				const cut = rel.lastIndexOf("/");
+				const folder = cut < 0 ? "" : rel.slice(0, cut);
+				const option = new Option(cut < 0 ? rel : rel.slice(cut + 1), path);
+				if (this.handed.has(path)) option.textContent += " (handed in)";
+				if (!folder) {
+					pick.append(option);
+					continue;
+				}
+				let group = groups.get(folder);
+				if (!group) {
+					group = document.createElement("optgroup");
+					(group as HTMLOptGroupElement).label = folder;
+					groups.set(folder, group);
+					pick.append(group);
+				}
+				group.append(option);
+			}
+		}
+		pick.value = this.inputPath ?? "";
+		pick.disabled = this.running;
+		const model = this.inputPath ? this.models.get(this.inputPath) ?? null : null;
+		if (this.textEditor.getModel() !== model) this.textEditor.setModel(model);
 	}
 
 	// ---- The file list ---------------------------------------------------------------

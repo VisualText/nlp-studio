@@ -16,6 +16,7 @@
         <span class="pick">
           <button id="run" type="button" class="run" title="Run the analyzer on the input file (F5)" disabled>Run</button>
           <span id="run-on" class="muted"></span>
+          <button id="text-toggle" type="button" aria-pressed="true" title="Show or hide the text a run reads, and the list to choose it from">Text</button>
           <label class="check" title="Run the engine in debug mode (-DEV): it keeps the parse tree after every pass, and each pass in the sequence then offers that tree and what its rules matched. Slower, and the trees can be large.">
             <input id="debug" type="checkbox" /> Debug
           </label>
@@ -47,6 +48,13 @@
             </div>
             <div class="results-body"></div>
           </section>
+        </section>
+        <section id="text-pane" class="text-pane" aria-label="The text a run reads">
+          <div class="text-bar">
+            <label for="text-pick" class="muted">Text</label>
+            <select id="text-pick" title="The text the next run reads"></select>
+          </div>
+          <div id="text-editor" class="editor"></div>
         </section>
       </main>
     </div>
