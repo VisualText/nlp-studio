@@ -1,0 +1,19 @@
+# Proposes new engine versions for the studio app (studio/server/requirements.txt pins
+# NLPPlus). Dependabot opens a pull request; the Studio workflow tests it with the new
+# engine; merging it, and the git pull and update.sh on the server, stay by hand.
+#
+# Only NLPPlus: the run server has no other dependency, and the page's npm packages are
+# left alone here.
+
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /studio/server
+    schedule:
+      interval: weekly
+      day: monday
+    allow:
+      - dependency-name: NLPPlus
+    commit-message:
+      prefix: "Engine:"
+    open-pull-requests-limit: 1
