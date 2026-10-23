@@ -8,8 +8,9 @@ server.
 The page sends it the analyzer's files with the `nlp/workspaceFiles` notification; see
 `src/server/browserServer.ts` and `memoryFiles.ts` in that repository.
 
-**Committed, not built here.** Building it needs a vscode-nlp checkout and its npm
-install. To update, in a vscode-nlp checkout:
+**Committed, not built here.** When vscode-nlp releases, the Language server workflow
+(`.github/workflows/language-server.yml`) builds it from the new tag and opens a pull
+request. To update by hand, in a vscode-nlp checkout:
 
 ```bash
 npm ci
@@ -17,4 +18,4 @@ npx webpack --mode production --config-name browserServer
 cp dist/browserServer.js ../nlp-studio/studio/public/language-server/
 ```
 
-Then change the commit above.
+Then change the tag and commit above; the workflow finds them there.

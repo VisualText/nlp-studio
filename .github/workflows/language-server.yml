@@ -1,0 +1,114 @@
+# Propose a new language server for the studio app when vscode-nlp releases.
+#
+# studio/public/language-server/browserServer.js is committed, built from a vscode-nlp
+# tag named in SOURCE.md next to it. When a newer vscode-nlp release exists, this builds
+# browserServer.js from it and opens a pull request; the Studio workflow tests that
+# pull request. Merging it, and the git pull and update.sh on the server, stay by hand.
+# (Engine versions are proposed the same way by Dependabot; see ../dependabot.yml.)
+#
+# GitHub-hosted runner ONLY -- never the self-hosted production runner
+# (see deploy-studio.yml). Triggers are dispatch and schedule only.
+#
+# The pull request is opened with CLASSIC_PAT, not GITHUB_TOKEN: a pull request that
+# GITHUB_TOKEN opens or pushes to starts no workflows, so it would arrive untested.
+
+name: Language server
+
+on:
+  # vscode-nlp pings this repository after every release (stopgap/deploy/workflows/
+  # vscode-nlp.yml); deploy-studio.yml answers the same ping for the site root.
+  repository_dispatch:
+    types: [upstream-release]
+
+  workflow_dispatch:
+
+  # In case a ping is lost. Mondays 03:40 UTC.
+  schedule:
+    - cron: '40 3 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: language-server
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    name: Propose the latest vscode-nlp language server
+    if: ${{ github.event_name != 'repository_dispatch' || github.event.client_payload.source == 'vscode-nlp' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SOURCE_MD: studio/public/language-server/SOURCE.md
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.CLASSIC_PAT }}
+
+      - name: Is there a newer vscode-nlp?
+        id: want
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$(gh api repos/VisualText/vscode-nlp/releases/latest --jq .tag_name)"
+          branch="bump/language-server-$tag"
+          echo "latest vscode-nlp release: $tag"
+          if grep -qF "tag \`$tag\`" "$SOURCE_MD"; then
+            echo "browserServer.js is already built from $tag"
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            echo "$branch already exists -- its pull request is waiting"
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.want.outputs.go == 'true'
+        with:
+          repository: VisualText/vscode-nlp
+          ref: ${{ steps.want.outputs.tag }}
+          path: _vscode-nlp
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        if: steps.want.outputs.go == 'true'
+        with:
+          node-version: "20"
+
+      - name: Build browserServer.js
+        if: steps.want.outputs.go == 'true'
+        working-directory: _vscode-nlp
+        run: |
+          npm ci --no-audit --no-fund
+          npx webpack --mode production --config-name browserServer
+
+      - name: Open the pull request
+        if: steps.want.outputs.go == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.CLASSIC_PAT }}
+          TAG: ${{ steps.want.outputs.tag }}
+          BRANCH: ${{ steps.want.outputs.branch }}
+        run: |
+          set -euo pipefail
+          commit="$(git -C _vscode-nlp rev-parse --short=8 HEAD)"
+          cp _vscode-nlp/dist/browserServer.js studio/public/language-server/
+          sed -i -E "s/tag \`[^\`]+\` \(\`[0-9a-f]+\`\)/tag \`$TAG\` (\`$commit\`)/" "$SOURCE_MD"
+          grep -qF "tag \`$TAG\`" "$SOURCE_MD" || { echo "could not update $SOURCE_MD"; exit 1; }
+          rm -rf _vscode-nlp
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git add studio/public/language-server
+          git commit -m "Language server: vscode-nlp $TAG"
+          git push origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "Language server: vscode-nlp $TAG" \
+            --body "browserServer.js rebuilt from vscode-nlp \`$TAG\` (\`$commit\`), by the Language server workflow ($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID).
+
+          Check before merging: the Studio tests pass, and the page still sends what the server expects (\`nlp/workspaceFiles\`, \`nlp/telemetry\` in vscode-nlp's src/server/browserServer.ts). After merging, \`git pull\` and \`studio/deploy/update.sh\` on the server put it live."
