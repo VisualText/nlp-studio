@@ -4,7 +4,12 @@
 #analyzer { max-width: min(280px, 40vw); text-overflow: ellipsis; }
 
 .layout { flex: 1; display: grid; grid-template-columns: minmax(200px, 280px) 1fr; min-height: 0; }
-@media (max-width: 720px) { .layout { grid-template-columns: 1fr; grid-template-rows: 30vh 1fr; } }
+/* The text a run reads, beside the editor, while there is one to show. */
+.layout.with-text { grid-template-columns: minmax(200px, 280px) minmax(0, 1.4fr) minmax(260px, 1fr); }
+@media (max-width: 720px) {
+	.layout, .layout.with-text { grid-template-columns: 1fr; grid-template-rows: 30vh 1fr; }
+	.layout.with-text { grid-template-rows: 30vh 1fr 40vh; }
+}
 
 .files { overflow: auto; padding: 8px 10px; background: var(--panel); border-right: 1px solid var(--line); }
 /* The lists are @visualtext/analyzer-views (its style.css), in the studio's colours. */
@@ -48,6 +53,12 @@ button.commit { border-color: var(--accent); color: var(--on-ink); font-weight: 
 .editor-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .path { padding: 5px 12px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); background: var(--panel); }
 .editor { flex: 1; min-height: 0; }
+.text-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-left: 1px solid var(--line); }
+.text-pane[hidden] { display: none; }
+.text-bar { display: flex; align-items: center; gap: 8px; padding: 3px 8px 3px 12px; border-bottom: 1px solid var(--line);
+	background: var(--panel); font-size: 12px; }
+.text-bar select { flex: 1; min-width: 0; }
+#text-toggle[aria-pressed="true"] { background: var(--on); color: var(--on-ink); }
 .problems { max-height: 22vh; overflow: auto; border-top: 1px solid var(--line); background: var(--panel);
 	display: flex; flex-direction: column; }
 .problems button { border: 0; border-radius: 0; text-align: left; padding: 4px 12px; background: none; font-size: 12.5px; }
