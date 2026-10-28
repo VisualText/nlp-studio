@@ -2,7 +2,7 @@
 
 The NLP++ language server built for a Web Worker. It is `dist/browserServer.js` from
 [VisualText/vscode-nlp](https://github.com/VisualText/vscode-nlp), production build, at
-tag `v4.3.15` (`4efada44`). It has the same handlers as the extension's language
+tag `v4.3.19` (`0f29bef7`). It has the same handlers as the extension's language
 server.
 
 The page sends it the analyzer's files with the `nlp/workspaceFiles` notification; see
