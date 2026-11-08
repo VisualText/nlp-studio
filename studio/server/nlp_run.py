@@ -288,12 +288,14 @@ def run(files: dict[str, str], text: str, *, python: str = sys.executable, timeo
         log = engine_log(stdout)
         problems = (parse_log(_read(ana / "logs" / "make_ana.log"), pass_file)
                     + parse_log(_read(ana / "output" / "err.log"), pass_file))
+        # Before the crash check: from nlpplus 2.2.83 a build that fails raises, so the
+        # child exits without DONE, yet it is the rules that failed, not the engine.
+        if any(line.startswith("[Couldn't build analyzer") for line in log):
+            return _result("failed", "The analyzer did not build. See Problems.", started, problems=problems, log=log)
         if DONE not in stdout:
             detail = f": {log[-1]}" if log else ""
             return _result("crashed", f"The engine stopped ({_exit_status(proc.returncode)}){detail}", started,
                            problems=problems, log=log)
-        if any(line.startswith("[Couldn't build analyzer") for line in log):
-            return _result("failed", "The analyzer did not build. See Problems.", started, problems=problems, log=log)
 
         output = _outputs(ana / "output")
         if sys.platform != "win32":
