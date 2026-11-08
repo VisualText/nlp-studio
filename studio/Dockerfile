@@ -36,7 +36,7 @@ RUN set -eu; \
     else \
         url="https://github.com/VisualText/visualtext-files/releases/download/$VISUALTEXT_FILES_TAG/visualtext.zip"; \
     fi; \
-    curl -fsSL --retry 3 --retry-delay 2 -o /tmp/visualtext.zip "$url"; \
+    curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 -o /tmp/visualtext.zip "$url"; \
     mkdir -p /visualtext; \
     unzip -q /tmp/visualtext.zip -d /visualtext; \
     rm /tmp/visualtext.zip; \
@@ -51,7 +51,7 @@ RUN set -eu; \
     else \
         url="https://github.com/VisualText/analyzers/releases/download/$VISUALTEXT_ANALYZERS_TAG/analyzers.zip"; \
     fi; \
-    curl -fsSL --retry 3 --retry-delay 2 -o /tmp/analyzers.zip "$url"; \
+    curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 -o /tmp/analyzers.zip "$url"; \
     mkdir -p /analyzers; \
     unzip -q /tmp/analyzers.zip -d /analyzers; \
     rm /tmp/analyzers.zip; \
